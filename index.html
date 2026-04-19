@@ -180,49 +180,41 @@ async function convertGoogleSheetData() {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const csv = await response.text();
-    const lines = csv.split('\n').slice(1); // Skip header
+    const lines = csv.split('\n');
     
-    const data = lines.map(line => {
-      // Proper CSV parsing that handles quoted fields
-      const cols = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-        
-        if (char === '"') {
-          if (inQuotes && nextChar === '"') {
-            current += '"';
-            i++; // Skip next quote
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          cols.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      cols.push(current.trim()); // Add last column
+    // Parse header to find column indices dynamically
+    const header = parseCSVLine(lines[0]);
+    
+    // Find column indices
+    const distIdx = header.findIndex(h => h.toLowerCase().includes('d_name') || h.toLowerCase().includes('district'));
+    const tehIdx = header.findIndex(h => h.toLowerCase().includes('t_name') || h.toLowerCase().includes('tehsil'));
+    const marIdx = header.findIndex(h => h.toLowerCase().includes('m_name') || h.toLowerCase().includes('markaz'));
+    const wingIdx = header.findIndex(h => h.toLowerCase().includes('w_name') || h.toLowerCase().includes('wing'));
+    const emisIdx = header.findIndex(h => h.toLowerCase().includes('s_id') || h.toLowerCase().includes('emis'));
+    const schoolIdx = header.findIndex(h => h.toLowerCase().includes('s_name') || h.toLowerCase().includes('school'));
+    const baselineIdx = header.findIndex(h => h.toLowerCase().includes('baseline') && !h.toLowerCase().includes('girls'));
+    const currIdx = header.findIndex(h => h.toLowerCase().includes('current') || h.toLowerCase().includes('curr'));
+    const targIdx = header.findIndex(h => h.toLowerCase().includes('target') || h.toLowerCase().includes('targ'));
+    const prevIdx = header.findIndex(h => h.toLowerCase().includes('previous') || h.toLowerCase().includes('prev'));
+    
+    const data = lines.slice(1).map(line => {
+      const cols = parseCSVLine(line);
       
       return [
-        cols[0] || '',  // District
-        cols[1] || '',  // Tehsil
-        cols[2] || '',  // Markaz
-        cols[3] || '',  // Wing
-        cols[5] || '',  // EMIS
-        cols[6] || '',  // School
-        parseInt(cols[12]) || 0,  // Baseline
-        parseInt(cols[16]) || 0,  // Current
-        parseInt(cols[17]) || 0,  // Target
-        parseInt(cols[21]) || 0   // Previous
+        (cols[distIdx] || '').trim(),      // District
+        (cols[tehIdx] || '').trim(),       // Tehsil
+        (cols[marIdx] || '').trim(),       // Markaz
+        (cols[wingIdx] || '').trim(),      // Wing
+        (cols[emisIdx] || '').trim(),      // EMIS
+        (cols[schoolIdx] || '').trim(),    // School
+        parseInt(cols[baselineIdx]) || 0,  // Baseline
+        parseInt(cols[currIdx]) || 0,      // Current
+        parseInt(cols[targIdx]) || 0,      // Target
+        parseInt(cols[prevIdx]) || 0       // Previous
       ];
     }).filter(r => {
-      // Filter out empty rows and rows with only quotes/whitespace
-      return r[0] && r[0] !== '"' && r[0].trim() !== '' && r[0] !== '-';
+      // Filter out empty rows and rows with only whitespace
+      return r[0] && r[0].trim() !== '' && r[0] !== '-' && r[0] !== 'null';
     });
     
     return data;
@@ -230,6 +222,35 @@ async function convertGoogleSheetData() {
     console.error('Error fetching CSV:', error);
     throw error;
   }
+}
+
+// Proper RFC 4180 CSV line parser
+function parseCSVLine(line) {
+  const cols = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    const nextChar = line[i + 1];
+    
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      cols.push(current.trim().replace(/^"|"$/g, '')); // Remove surrounding quotes
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  cols.push(current.trim().replace(/^"|"$/g, '')); // Add last column and remove quotes
+  
+  return cols;
 }
 
 // Build filter hierarchy from data
