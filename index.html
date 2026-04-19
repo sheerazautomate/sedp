@@ -183,20 +183,47 @@ async function convertGoogleSheetData() {
     const lines = csv.split('\n').slice(1); // Skip header
     
     const data = lines.map(line => {
-      const cols = line.split(',').map(c => c.trim());
+      // Proper CSV parsing that handles quoted fields
+      const cols = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            current += '"';
+            i++; // Skip next quote
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          cols.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      cols.push(current.trim()); // Add last column
+      
       return [
-        cols[0],  // District
-        cols[1],  // Tehsil
-        cols[2],  // Markaz
-        cols[3],  // Wing
-        cols[5],  // EMIS
-        cols[6],  // School
+        cols[0] || '',  // District
+        cols[1] || '',  // Tehsil
+        cols[2] || '',  // Markaz
+        cols[3] || '',  // Wing
+        cols[5] || '',  // EMIS
+        cols[6] || '',  // School
         parseInt(cols[12]) || 0,  // Baseline
         parseInt(cols[16]) || 0,  // Current
         parseInt(cols[17]) || 0,  // Target
         parseInt(cols[21]) || 0   // Previous
       ];
-    }).filter(r => r[0]); // Remove empty rows
+    }).filter(r => {
+      // Filter out empty rows and rows with only quotes/whitespace
+      return r[0] && r[0] !== '"' && r[0].trim() !== '' && r[0] !== '-';
+    });
     
     return data;
   } catch (error) {
