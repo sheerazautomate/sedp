@@ -39,14 +39,15 @@
     .insight-mini-table th { background:#f1f5f9; padding:5px 8px; text-align:left; font-weight:700; color:#374151; }
     .insight-mini-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; }
     .rank-badge { display:inline-block; width:20px; height:20px; border-radius:50%; font-size:0.6rem; font-weight:700; text-align:center; line-height:20px; }
-    .data-source-notice { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; }
+    .data-source-notice { background: #d1ecf1; border: 1px solid #bee5eb; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; color: #0c5460; }
+    .success-notice { background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; color: #155724; }
   </style>
 </head>
 
 <body>
 <div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
   <div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
-  <h6 id="loaderText">Loading dashboard...</h6>
+  <h6 id="loaderText">🔄 Loading Punjab Data...</h6>
 </div>
 
 <div id="insightsModal" class="insight-modal-container">
@@ -103,13 +104,11 @@
 </div>
 
 <div class="container py-2">
-  <div class="data-source-notice">
-    ⚠️ <strong>Data Setup Required:</strong> This dashboard is ready but needs data. See the <a href="DATA_SETUP.md" target="_blank">Data Setup Guide</a> to connect your Google Sheet or upload data.
-  </div>
+  <div id="statusNotice" class="data-source-notice"></div>
 
   <div class="text-center mb-2">
     <h5 class="fw-bold mb-0">DEA Layyah Enrollment Dashboard</h5>
-    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Hosted on GitHub Pages</p>
+    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Connecting to Google Sheets...</p>
   </div>
 
   <div class="row g-1 mb-2 filter-row">
@@ -137,7 +136,7 @@
   <div class="kpi-group text-center">
     <div class="row g-0">
       <div class="col-4 border-end-custom"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div>
-      <div class="col-4 border-end-custom"><span class="stat-label">Target</span><p id="current" class="counter text-dark">0</p></div>
+      <div class="col-4 border-end-custom"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div>
       <div class="col-4"><span class="stat-label">Achievement</span><p id="achievement" class="counter text-success">0%</p></div>
     </div>
   </div>
@@ -159,34 +158,71 @@
   let currentChart = null;
   let currentFilterType = "all";
 
+  // Convert Google Sheets CSV to JSON format for dashboard
+  async function convertGoogleSheetData() {
+    const csvUrl = "https://docs.google.com/spreadsheets/d/1AxmpCZhsQ-rFAJkgYrTbPby6FEG8HHkbL60IStUl-ak/export?format=csv";
+    
+    try {
+      const response = await fetch(csvUrl);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const csv = await response.text();
+      const lines = csv.split('\n').slice(1); // Skip header
+      
+      const data = lines.map(line => {
+        const cols = line.split(',').map(c => c.trim());
+        return [
+          cols[0],  // District
+          cols[1],  // Tehsil
+          cols[2],  // Markaz
+          cols[3],  // Wing
+          cols[5],  // EMIS
+          cols[6],  // School
+          parseInt(cols[12]) || 0,  // Baseline
+          parseInt(cols[16]) || 0,  // Current
+          parseInt(cols[17]) || 0,  // Target
+          parseInt(cols[21]) || 0   // Previous
+        ];
+      }).filter(r => r[0]); // Remove empty rows
+      
+      return data;
+    } catch (error) {
+      console.error('Error fetching CSV:', error);
+      throw error;
+    }
+  }
+
   // Initialize on page load
   window.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('reportTimestamp').innerText = new Date().toLocaleString('en-PK', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Karachi' });
     loadMasterData();
   });
 
-  // Load data from your data source
+  // Load data from Google Sheets
   async function loadMasterData() {
     try {
-      document.getElementById('loaderText').innerText = 'Loading data...';
+      document.getElementById('loaderText').innerText = '🔄 Syncing with Google Sheets...';
       
-      // Change this URL based on your data source setup
-      // See DATA_SETUP.md for instructions
       const data = await convertGoogleSheetData();
-masterData = data; // or your Google Sheets API URL
-      
-      if (!response.ok) throw new Error('Data file not found');
-      
-      const data = await response.json();
       masterData = data;
+      
+      if (masterData.length === 0) {
+        throw new Error('No data found in spreadsheet');
+      }
+      
       buildFilterHierarchy();
       populateDistricts();
       
       document.getElementById('loader').style.display = 'none';
+      document.getElementById('statusNotice').innerHTML = '✅ <strong>Data Connected!</strong> Your dashboard is now live from Google Sheets. Updates every 5 minutes.';
+      document.getElementById('statusNotice').className = 'success-notice';
+      document.getElementById('reportTimestamp').innerText = 'Connected to Google Sheets • ' + new Date().toLocaleString('en-PK', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Karachi' });
+      
       updateStats();
     } catch (error) {
       console.error('Error loading data:', error);
-      document.getElementById('loaderText').innerText = '⚠️ Data loading failed. Check setup.';
+      document.getElementById('loaderText').innerText = '⚠️ Data Connection Failed';
+      document.getElementById('statusNotice').innerHTML = '❌ <strong>Connection Error:</strong> ' + error.message + '. Check that your Google Sheet is publicly shared.';
+      document.getElementById('statusNotice').className = 'data-source-notice';
       setTimeout(() => {
         document.getElementById('loader').style.display = 'none';
       }, 3000);
@@ -209,7 +245,7 @@ masterData = data; // or your Google Sheets API URL
   function populateDistricts() {
     const select = document.getElementById('district');
     select.innerHTML = '<option value="">All Districts</option>';
-    Object.keys(filterHierarchy).forEach(d => {
+    Object.keys(filterHierarchy).sort().forEach(d => {
       const opt = document.createElement('option');
       opt.value = d;
       opt.innerText = d;
@@ -224,7 +260,7 @@ masterData = data; // or your Google Sheets API URL
     select.innerHTML = '<option value="">All Wings</option>';
     
     if (dist && filterHierarchy[dist]) {
-      Object.keys(filterHierarchy[dist]).forEach(w => {
+      Object.keys(filterHierarchy[dist]).sort().forEach(w => {
         const opt = document.createElement('option');
         opt.value = w;
         opt.innerText = w;
@@ -243,7 +279,7 @@ masterData = data; // or your Google Sheets API URL
     select.innerHTML = '<option value="">All Tehsils</option>';
     
     if (dist && wing && filterHierarchy[dist] && filterHierarchy[dist][wing]) {
-      Object.keys(filterHierarchy[dist][wing]).forEach(t => {
+      Object.keys(filterHierarchy[dist][wing]).sort().forEach(t => {
         const opt = document.createElement('option');
         opt.value = t;
         opt.innerText = t;
@@ -288,11 +324,11 @@ masterData = data; // or your Google Sheets API URL
     });
 
     const current = filtered.reduce((sum, r) => sum + (r[7] || 0), 0);
-    const baseline = filtered.reduce((sum, r) => sum + (r[6] || 0), 0);
     const target = filtered.reduce((sum, r) => sum + (r[8] || 0), 0);
     const ach = target ? ((current / target) * 100).toFixed(1) : 0;
 
     document.getElementById('current').innerText = current;
+    document.getElementById('target').innerText = target;
     document.getElementById('achievement').innerText = ach + '%';
   }
 
@@ -336,7 +372,19 @@ masterData = data; // or your Google Sheets API URL
           { label: 'Target', data: target, backgroundColor: '#ffc107' }
         ]
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      options: { 
+        responsive: true, 
+        maintainAspectRatio: true,
+        scales: { 
+          y: { 
+            beginAtZero: true,
+            ticks: { stepSize: 10 }
+          } 
+        },
+        plugins: {
+          legend: { display: true, position: 'top' }
+        }
+      }
     });
   }
 
@@ -366,6 +414,7 @@ masterData = data; // or your Google Sheets API URL
     else if (type === 'below_target') fullTableData = fullTableData.filter(s => s.cur < s.tar && s.cur >= s.bas);
     else if (type === 'above_baseline') fullTableData = fullTableData.filter(s => s.cur >= s.bas);
     else if (type === 'above_target') fullTableData = fullTableData.filter(s => s.cur >= s.tar);
+    else if (type === 'all_schools') fullTableData = fullTableData.sort((a, b) => a.name.localeCompare(b.name));
 
     renderTable();
   }
@@ -373,11 +422,12 @@ masterData = data; // or your Google Sheets API URL
   // Render table
   function renderTable() {
     const table = document.getElementById('dataTable');
-    table.innerHTML = '<thead><tr><th>School</th><th>EMIS</th><th>Baseline</th><th>Current</th><th>Target</th><th>Ach%</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>#</th><th>School</th><th>EMIS</th><th>Baseline</th><th>Current</th><th>Target</th><th>Ach%</th></tr></thead>';
     
     fullTableData.forEach((s, i) => {
       const row = table.insertRow();
-      row.innerHTML = `<td>${s.name}</td><td>${s.emis}</td><td>${s.bas}</td><td>${s.cur}</td><td>${s.tar}</td><td>${s.ach.toFixed(1)}%</td>`;
+      const achColor = s.ach >= 90 ? 'text-success' : s.ach >= 80 ? 'text-warning' : 'text-danger';
+      row.innerHTML = `<td>${i+1}</td><td>${s.name}</td><td>${s.emis}</td><td>${s.bas}</td><td>${s.cur}</td><td>${s.tar}</td><td class="${achColor} fw-bold">${s.ach.toFixed(1)}%</td>`;
     });
 
     document.getElementById('tableSection').style.display = 'block';
@@ -387,7 +437,7 @@ masterData = data; // or your Google Sheets API URL
 
   // Show insights (placeholder)
   function showInsights() {
-    alert('Insights feature coming soon!');
+    alert('Insights feature coming soon! Will show detailed analysis of selected region.');
   }
 
   // Close insights modal
@@ -397,7 +447,7 @@ masterData = data; // or your Google Sheets API URL
 
   // Export insights PDF (placeholder)
   function exportInsightPDF() {
-    alert('PDF export feature will be available once data is connected');
+    alert('PDF export feature will be available in next update');
   }
 </script>
 
