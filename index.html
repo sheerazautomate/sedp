@@ -7,7 +7,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="fetch-data.js"></script>
   <style>
     @keyframes spin{100%{transform:rotate(360deg)}}
     body { background-color: #f4f7f6; font-family: system-ui, -apple-system, sans-serif; }
@@ -40,15 +39,13 @@
     .insight-mini-table th { background:#f1f5f9; padding:5px 8px; text-align:left; font-weight:700; color:#374151; }
     .insight-mini-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; }
     .rank-badge { display:inline-block; width:20px; height:20px; border-radius:50%; font-size:0.6rem; font-weight:700; text-align:center; line-height:20px; }
-    .data-source-notice { background: #d1ecf1; border: 1px solid #bee5eb; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; color: #0c5460; }
-    .success-notice { background: #d4edda; border: 1px solid #c3e6cb; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; color: #155724; }
   </style>
 </head>
 
 <body>
 <div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
   <div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
-  <h6 id="loaderText">🔄 Loading Punjab Data...</h6>
+  <h6 id="loaderText">Downloading Punjab Data...</h6>
 </div>
 
 <div id="insightsModal" class="insight-modal-container">
@@ -105,18 +102,16 @@
 </div>
 
 <div class="container py-2">
-  <div id="statusNotice" class="data-source-notice"></div>
-
   <div class="text-center mb-2">
-    <h5 class="fw-bold mb-0">DEA Layyah Enrollment Dashboard</h5>
-    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Connecting to Google Sheets...</p>
+    <h5 class="fw-bold mb-0">DEA Layyah Enrollment Dashboard by SheeraZ</h5>
+    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Syncing...</p>
   </div>
 
   <div class="row g-1 mb-2 filter-row">
-    <div class="col"><select id="district" class="form-select" onchange="updateWing()"><option>Select District</option></select></div>
-    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"><option>Select Wing</option></select></div>
-    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"><option>Select Tehsil</option></select></div>
-    <div class="col"><select id="markaz" class="form-select"><option>Select Markaz</option></select></div>
+    <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
+    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
+    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
+    <div class="col"><select id="markaz" class="form-select"></select></div>
     <div class="col-auto">
       <div class="btn-group w-100">
         <button class="btn btn-primary btn-sm fw-bold" onclick="loadData()">Chart</button>
@@ -134,322 +129,456 @@
     <div class="col"><button class="btn btn-primary btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('all_schools')">All Schools</button></div>
   </div>
 
-  <div class="kpi-group text-center">
-    <div class="row g-0">
-      <div class="col-4 border-end-custom"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div>
-      <div class="col-4 border-end-custom"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div>
-      <div class="col-4"><span class="stat-label">Achievement</span><p id="achievement" class="counter text-success">0%</p></div>
-    </div>
+  <div class="row g-2 mb-2">
+    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
+    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><p id="totalBaseline" class="counter" style="font-size:1rem;">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Base %</span><p id="baselinePct" class="counter text-info" style="font-size:1rem;">0%</p></div></div>
   </div>
 
-  <div class="chart-wrapper">
-    <div id="chartParent"></div>
-  </div>
-  <div id="tableSection" class="mt-3" style="display:none;">
-    <div class="table-responsive" style="max-height:500px;">
-      <table id="dataTable" class="table table-sm table-hover mb-0"></table>
+  <div id="tableView" class="chart-wrapper hidden">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="d-flex align-items-center">
+        <select id="pageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
+        <select id="sortOrder" class="form-select form-select-sm me-1" style="width:80px;" onchange="sortData()"><option value="ach">Sort: Ach%</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
+        <button class="btn btn-dark btn-sm me-1" onclick="exportToCSV()">CSV</button>
+        <button class="btn btn-danger btn-sm" onclick="exportToPDF()">PDF</button>
+      </div>
+      <span id="tableLabel" class="fw-bold text-primary small">LIST</span>
+      <button class="btn btn-secondary btn-sm" onclick="showChart()">Back</button>
     </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="pagination"></ul></nav>
   </div>
+  <div id="chartView" class="chart-wrapper"><div id="chartParent"><canvas id="chart"></canvas></div></div>
 </div>
 
 <script>
-  let masterData = [];
-  let filterHierarchy = {};
-  let fullTableData = [];
-  let currentChart = null;
-  let currentFilterType = "all";
+let MASTER_DATA = [], hierarchy = {}, chart, fullTableData = [], currentPage = 1, currentFilterType = "all", insightDonutChart = null;
 
-  // Convert Google Sheets CSV to JSON format for dashboard
-  async function convertGoogleSheetData() {
-    const csvUrl = "https://docs.google.com/spreadsheets/d/1AxmpCZhsQ-rFAJkgYrTbPby6FEG8HHkbL60IStUl-ak/export?format=csv";
+function showLoader(txt) { if(txt) document.getElementById("loaderText").innerText = txt; document.getElementById("loader").style.display = "flex"; }
+function hideLoader() { document.getElementById("loader").style.display = "none"; }
+
+// Convert Google Sheets CSV to JSON format for dashboard
+async function convertGoogleSheetData() {
+  const csvUrl = "https://docs.google.com/spreadsheets/d/1AxmpCZhsQ-rFAJkgYrTbPby6FEG8HHkbL60IStUl-ak/export?format=csv";
+  
+  try {
+    const response = await fetch(csvUrl);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
-    try {
-      const response = await fetch(csvUrl);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
-      const csv = await response.text();
-      const lines = csv.split('\n').slice(1); // Skip header
-      
-      const data = lines.map(line => {
-        const cols = line.split(',').map(c => c.trim());
-        return [
-          cols[0],  // District
-          cols[1],  // Tehsil
-          cols[2],  // Markaz
-          cols[3],  // Wing
-          cols[5],  // EMIS
-          cols[6],  // School
-          parseInt(cols[12]) || 0,  // Baseline
-          parseInt(cols[16]) || 0,  // Current
-          parseInt(cols[17]) || 0,  // Target
-          parseInt(cols[21]) || 0   // Previous
-        ];
-      }).filter(r => r[0]); // Remove empty rows
-      
-      return data;
-    } catch (error) {
-      console.error('Error fetching CSV:', error);
-      throw error;
-    }
+    const csv = await response.text();
+    const lines = csv.split('\n').slice(1); // Skip header
+    
+    const data = lines.map(line => {
+      const cols = line.split(',').map(c => c.trim());
+      return [
+        cols[0],  // District
+        cols[1],  // Tehsil
+        cols[2],  // Markaz
+        cols[3],  // Wing
+        cols[5],  // EMIS
+        cols[6],  // School
+        parseInt(cols[12]) || 0,  // Baseline
+        parseInt(cols[16]) || 0,  // Current
+        parseInt(cols[17]) || 0,  // Target
+        parseInt(cols[21]) || 0   // Previous
+      ];
+    }).filter(r => r[0]); // Remove empty rows
+    
+    return data;
+  } catch (error) {
+    console.error('Error fetching CSV:', error);
+    throw error;
   }
+}
 
-  // Initialize on page load
-  window.addEventListener('DOMContentLoaded', () => {
-    loadMasterData();
+// Build filter hierarchy from data
+function buildHierarchy(data) {
+  let h = {};
+  data.forEach(r => {
+    const d = r[0], w = r[3], t = r[1], m = r[2];
+    if (!h[d]) h[d] = {};
+    if (!h[d][w]) h[d][w] = {};
+    if (!h[d][w][t]) h[d][w][t] = [];
+    if (!h[d][w][t].includes(m)) h[d][w][t].push(m);
+  });
+  return h;
+}
+
+window.onload = async () => {
+  showLoader("Initializing...");
+  try {
+    showLoader("Fetching data from Google Sheets...");
+    const data = await convertGoogleSheetData();
+    MASTER_DATA = data;
+    hierarchy = buildHierarchy(data);
+    setupDropdowns();
+    document.getElementById("reportTimestamp").innerText = `(Last sync: ${new Date().toLocaleString('en-PK')})`;
+    showLoader("Processing 38k+ Schools...");
+    loadData();
+    hideLoader();
+  } catch (error) {
+    console.error('Error:', error);
+    showLoader("❌ Failed to load data. Check that Google Sheet is publicly shared.");
+    setTimeout(hideLoader, 3000);
+  }
+};
+
+function setupDropdowns() {
+  const distSelect = document.getElementById("district");
+  distSelect.innerHTML = '<option value="">All Districts</option>';
+  Object.keys(hierarchy).sort().forEach(d => distSelect.innerHTML += `<option value="${d}">${d}</option>`);
+  updateWing();
+}
+
+function updateWing() {
+  const d = document.getElementById("district").value, wEl = document.getElementById("wing");
+  wEl.innerHTML = '<option value="">Wing</option>';
+  document.getElementById("tehsil").innerHTML = '<option value="">Tehsil</option>';
+  document.getElementById("markaz").innerHTML = '<option value="">Markaz</option>';
+  if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`);
+  else { let wings = new Set(); Object.values(hierarchy).forEach(obj => Object.keys(obj).forEach(w => wings.add(w))); Array.from(wings).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
+}
+
+function updateTehsil() {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, tEl = document.getElementById("tehsil");
+  tEl.innerHTML = '<option value="">Tehsil</option>'; if (!w) return;
+  let tehsils = new Set();
+  if (d) { if(hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach(t => tehsils.add(t)); }
+  else { Object.values(hierarchy).forEach(dist => { if(dist[w]) Object.keys(dist[w]).forEach(t => tehsils.add(t)); }); }
+  Array.from(tehsils).sort().forEach(t => tEl.innerHTML += `<option value="${t}">${t}</option>`);
+}
+
+function updateMarkaz() {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, mEl = document.getElementById("markaz");
+  mEl.innerHTML = '<option value="">Markaz</option>'; if (!t) return;
+  let markazs = new Set();
+  if (d) { if(hierarchy[d][w][t]) hierarchy[d][w][t].forEach(m => markazs.add(m)); }
+  else { Object.values(hierarchy).forEach(dist => { if(dist[w] && dist[w][t]) dist[w][t].forEach(m => markazs.add(m)); }); }
+  Array.from(markazs).sort().forEach(m => mEl.innerHTML += `<option value="${m}">${m}</option>`);
+}
+
+function loadData() {
+  showChart();
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
+  let stats = { cur:0, tar:0, bas:0, schools: new Set() };
+  let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
+  filtered.forEach(r => {
+    stats.cur += r[7]; stats.tar += r[8]; stats.bas += r[6]; if(r[4]) stats.schools.add(r[4]);
+    let key = m ? r[5] : r[keyIdx];
+    if(!groups[key]) groups[key] = { name: key, cur:0, tar:0, bas:0 };
+    groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].bas += r[6];
+  });
+  const ach = stats.tar ? Math.round((stats.cur / stats.tar) * 100) : 0;
+  document.getElementById("current").innerText = stats.cur.toLocaleString();
+  document.getElementById("target").innerText = stats.tar.toLocaleString();
+  document.getElementById("ach").innerText = ach + "%";
+  document.getElementById("bgap").innerText = (stats.cur - stats.bas).toLocaleString();
+  document.getElementById("tgap").innerText = (stats.cur - stats.tar).toLocaleString();
+  document.getElementById("schools").innerText = stats.schools.size.toLocaleString();
+  document.getElementById("totalBaseline").innerText = stats.bas.toLocaleString();
+  document.getElementById("baselinePct").innerText = stats.bas ? Math.round((stats.cur / stats.bas) * 100) + "%" : "0%";
+  document.getElementById("ach").style.color = ach < 80 ? "#dc3545" : ach < 90 ? "#ffc107" : "#198754";
+  const chartData = Object.values(groups).map(g => {
+    const a = g.tar ? (g.cur / g.tar) * 100 : 0;
+    return { name: g.name, ach: a, color: (g.cur < g.bas) ? "#dc3545" : (g.cur < g.tar) ? "#ffc107" : "#198754" };
+  }).sort((a,b) => b.ach - a.ach);
+  drawChart(chartData);
+}
+
+function drawChart(data) {
+  const ctx = document.getElementById("chart"); if (chart) chart.destroy();
+  const chartHeight = Math.max(500, data.length * 25); document.getElementById("chartParent").style.height = chartHeight + "px";
+  chart = new Chart(ctx, {
+    type: 'bar', data: { labels: data.map(d => d.name), datasets: [{ data: data.map(d => d.ach.toFixed(1)), backgroundColor: data.map(d => d.color) }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { autoSkip: false, font: { size: 9 } } } }, plugins: { legend: { display: false } } }
+  });
+}
+
+function loadTable(type) {
+  currentFilterType = type;
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  const labelMap = { 'all': 'Summary List', 'all_schools': 'All Schools List', 'below_baseline': 'Below Baseline List', 'below_target': 'Below Target List', 'above_baseline': 'Above Baseline List', 'above_target': 'Above Target List' };
+  document.getElementById("tableLabel").innerText = `${labelMap[type]} - ${m || t || w || d || "Punjab"}`;
+  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
+  let tableData = [];
+  if (type !== 'all' || m) { tableData = filtered.map(r => ({ name: r[5], emis: r[4], markaz: r[2], bas: r[6], cur: r[7], tar: r[8], prev: r[9], dist: r[0], teh: r[1], wing: r[3] })); }
+  else {
+    let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
+    filtered.forEach(r => { let key = r[keyIdx]; if(!groups[key]) groups[key] = { name: key, bas:0, cur:0, tar:0, prev:0 }; groups[key].bas += r[6]; groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].prev += r[9]; });
+    tableData = Object.values(groups);
+  }
+  if (type === "below_baseline") tableData = tableData.filter(s => s.cur < s.bas);
+  else if (type === "below_target") tableData = tableData.filter(s => s.cur < s.tar);
+  else if (type === "above_baseline") tableData = tableData.filter(s => s.cur >= s.bas);
+  else if (type === "above_target") tableData = tableData.filter(s => s.cur >= s.tar);
+  fullTableData = tableData.map(s => { s.ach = s.tar ? (s.cur / s.tar) * 100 : 0; s.color = (s.cur < s.bas) ? "#dc3545" : (s.cur < s.tar) ? "#ffc107" : "#198754"; return s; });
+  sortData(); showTable();
+}
+
+function sortData() {
+  const val = document.getElementById("sortOrder").value;
+  fullTableData.sort((a, b) => { if (val === 'name') return a.name.localeCompare(b.name); if (val === 'emis') return (a.emis || "").localeCompare(b.emis || ""); if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || ""); return b.ach - a.ach; });
+  currentPage = 1; renderTable();
+}
+
+function renderTable() {
+  const size = parseInt(document.getElementById("pageSize").value), start = (currentPage - 1) * size, pageData = fullTableData.slice(start, start + size);
+  const isSchool = currentFilterType !== 'all' || document.getElementById("markaz").value;
+  document.getElementById("tableHead").innerHTML = `<tr><th>Sr.</th><th>${isSchool ? 'School / Markaz' : 'Name'}</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr>`;
+  let html = "";
+  pageData.forEach((s, i) => {
+    let srNo = start + i + 1; let delta = s.cur - s.prev; let dIcon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→"; let dColor = delta > 0 ? "#198754" : delta < 0 ? "#dc3545" : "#6c757d";
+    let nameLine = s.emis ? `<small class="text-muted">${s.emis}</small> | <small class="text-primary">${s.markaz}</small><br><strong>${s.name}</strong>` : `<strong>${s.name}</strong>`;
+    html += `<tr><td>${srNo}</td><td>${nameLine}</td><td>${s.bas.toLocaleString()}</td><td>${s.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${s.tar.toLocaleString()}</td><td class="fw-bold" style="color:${s.color}">${s.ach.toFixed(1)}%</td></tr>`;
+  });
+  document.getElementById("tableBody").innerHTML = html; renderPagination();
+}
+
+function renderPagination() {
+  const total = Math.ceil(fullTableData.length / parseInt(document.getElementById("pageSize").value));
+  let html = ""; for (let i = Math.max(1, currentPage-2); i <= Math.min(total, currentPage+2); i++) { html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" onclick="goToPage(${i})">${i}</a></li>`; }
+  document.getElementById("pagination").innerHTML = html;
+}
+
+function goToPage(p) { currentPage = p; renderTable(); }
+function showTable() { document.getElementById("chartView").classList.add("hidden"); document.getElementById("tableView").classList.remove("hidden"); }
+function showChart() { document.getElementById("chartView").classList.remove("hidden"); document.getElementById("tableView").classList.add("hidden"); }
+
+/* INSIGHTS LOGIC */
+function showInsights() {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  let scopeLevel = 0; if (d) scopeLevel = 1; if (d && w) scopeLevel = 2; if (d && w && t) scopeLevel = 3; if (d && w && t && m) scopeLevel = 4;
+  let bcParts = ['<span>Punjab</span>']; if (d) bcParts.push(`<span>${d}</span>`); if (w) bcParts.push(`<span>${w}</span>`); if (t) bcParts.push(`<span>${t}</span>`); if (m) bcParts.push(`<span>${m}</span>`);
+  document.getElementById("insightBreadcrumb").innerHTML = bcParts.join(' &rarr; ');
+  document.getElementById("insightScopeLabel").innerText = m || t || w || d || "PUNJAB";
+
+  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
+  let totCur = 0, totBas = 0, totTar = 0, totPrev = 0, schoolsBB = 0, schoolsBT = 0, schoolsAT = 0;
+  filtered.forEach(r => { totCur += r[7]; totBas += r[6]; totTar += r[8]; totPrev += r[9]; if (r[7] < r[6]) schoolsBB++; else if (r[7] < r[8]) schoolsBT++; else schoolsAT++; });
+
+  const achPct = totTar ? Math.round((totCur / totTar) * 100) : 0;
+  const basePct = totBas ? Math.round((totCur / totBas) * 100) : 0;
+  document.getElementById("ins-cur").innerText = totCur.toLocaleString();
+  document.getElementById("ins-base").innerText = totBas.toLocaleString();
+  document.getElementById("ins-tar").innerText = totTar.toLocaleString();
+  document.getElementById("ins-ach").innerText = achPct + "%";
+  document.getElementById("ins-ach").style.color = achPct < 80 ? "#dc3545" : achPct < 90 ? "#ffc107" : "#198754";
+  document.getElementById("ins-sch-total").innerText = filtered.length;
+  document.getElementById("ins-sch-bb").innerText = schoolsBB;
+  document.getElementById("ins-sch-bt").innerText = schoolsBT;
+  document.getElementById("ins-sch-at").innerText = schoolsAT;
+  document.getElementById("ins-ach-bar").style.width = Math.min(achPct, 100) + "%";
+  document.getElementById("ins-ach-bar").style.background = achPct < 80 ? "#dc3545" : achPct < 90 ? "#ffc107" : "#198754";
+  document.getElementById("ins-ach-bar-label").innerText = achPct + "%";
+  document.getElementById("ins-base-bar").style.width = Math.min(basePct, 100) + "%";
+  document.getElementById("ins-base-bar-label").innerText = basePct + "%";
+
+  if (insightDonutChart) insightDonutChart.destroy();
+  insightDonutChart = new Chart(document.getElementById("insightDonut"), {
+    type: 'doughnut', data: { labels: ['Below Baseline', 'Below Target', 'Above Target'], datasets: [{ data: [schoolsBB, schoolsBT, schoolsAT], backgroundColor: ['#dc3545','#ffc107','#198754'], borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }
   });
 
-  // Load data from Google Sheets
-  async function loadMasterData() {
-    try {
-      document.getElementById('loaderText').innerText = '🔄 Syncing with Google Sheets...';
-      
-      const data = await convertGoogleSheetData();
-      masterData = data;
-      
-      if (masterData.length === 0) {
-        throw new Error('No data found in spreadsheet');
+  buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, totTar, achPct, schoolsBB, totCur - totPrev);
+  document.getElementById("insightsModal").style.display = "flex";
+}
+
+function buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, totTar, achPct, schoolsBB, totalDelta) {
+  const container = document.getElementById("ins-dynamic-section"); container.innerHTML = "";
+  function aggregateBy(keyIdx) {
+    let groups = {}; filtered.forEach(r => {
+      const key = r[keyIdx]; if (!key) return;
+      if (!groups[key]) groups[key] = { name: key, cur: 0, bas: 0, tar: 0, prev: 0, total: 0 };
+      groups[key].cur += r[7]; groups[key].bas += r[6]; groups[key].tar += r[8]; groups[key].prev += r[9]; groups[key].total++;
+    });
+    return Object.values(groups).map(g => { g.ach = g.tar ? (g.cur / g.tar) * 100 : 0; g.delta = g.cur - g.prev; g.color = g.cur < g.bas ? "#dc3545" : g.cur < g.tar ? "#ffc107" : "#198754"; return g; }).sort((a, b) => a.ach - b.ach);
+  }
+
+  function miniTable(title, rows, accentClass, showSchoolCount) {
+    let rowsHtml = rows.map((r, i) => {
+      const dColor = r.delta > 0 ? "#198754" : r.delta < 0 ? "#dc3545" : "#6c757d";
+      return `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i+1}</span></td><td><strong>${r.name}</strong></td>${showSchoolCount ? `<td>${r.total}</td>` : ''}<td>${r.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${r.delta>0?'+':''}${r.delta}</td><td style="font-weight:700;color:${r.color};">${r.ach.toFixed(1)}%</td></tr>`;
+    }).join("");
+    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th>${showSchoolCount ? '<th>Schools</th>' : ''}<th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+  }
+
+  let html = ""; let criticalInfo = ""; let deltaMsg = totalDelta > 0 ? `increased by ${totalDelta}` : totalDelta < 0 ? `decreased by ${Math.abs(totalDelta)}` : "remained stagnant";
+
+  if (scopeLevel === 0) {
+    const districts = aggregateBy(0); html += `<div class="col-md-6">${miniTable("Bottom 5 Districts", districts.slice(0, 5), "accent-red", true)}</div><div class="col-md-6">${miniTable("Top 5 Districts", [...districts].sort((a,b)=>b.ach-a.ach).slice(0, 5), "accent-green", true)}</div>`;
+    criticalInfo = `District ${districts[0].name} is most critical at ${districts[0].ach.toFixed(1)}%.`;
+  } else if (scopeLevel === 1) {
+    const wings = aggregateBy(3); const tehsils = aggregateBy(1);
+    html += `<div class="col-md-5">${miniTable("Wings Breakdown", wings, "accent-blue", true)}</div><div class="col-md-7">${miniTable("Bottom 5 Tehsils", tehsils.slice(0, 5), "accent-red", true)}</div>`;
+    criticalInfo = `${tehsils.length} tehsils. Tehsil ${tehsils[0].name} is most critical at ${tehsils[0].ach.toFixed(1)}%.`;
+  } else if (scopeLevel === 2) {
+    const tehsils = aggregateBy(1); const markazs = aggregateBy(2);
+    html += `<div class="col-md-6">${miniTable("Tehsil Breakdown", tehsils, "accent-blue", true)}</div><div class="col-md-6">${miniTable("Bottom 5 Markaz", markazs.slice(0, 5), "accent-red", false)}</div>`;
+    criticalInfo = `${markazs.length} markaz. Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
+  } else if (scopeLevel === 3) {
+    const markazs = aggregateBy(2); const b5sch = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0)).slice(0,5);
+    html += `<div class="col-md-6">${miniTable("Markaz Performance", markazs, "accent-blue", true)}</div><div class="col-md-6"><div class="info-card-nb accent-red h-100"><div class="section-header">Bottom 5 Schools</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>School</th><th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${b5sch.map((s,i)=>`<tr><td><span class="rank-badge" style="background:#dc3545;color:white;">${i+1}</span></td><td><small>${s[2]}</small><br><strong>${s[5]}</strong></td><td>${s[7]}</td><td style="color:${s[7]-s[9]>0?"#198754":"#dc3545"};font-weight:700;">${s[7]-s[9]}</td><td style="font-weight:700;color:#dc3545;">${(s[7]/s[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
+    criticalInfo = `Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
+  } else if (scopeLevel === 4) {
+    const schools = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0));
+    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f1f5f9;"><tr><th>School</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr></thead><tbody>${schools.map(r=>`<tr><td><small>${r[4]}</small><br><strong>${r[5]}</strong></td><td>${r[6]}</td><td>${r[7]}</td><td style="color:${r[7]-r[9]>0?"#198754":"#dc3545"};font-weight:700;">${r[7]-r[9]}</td><td>${r[8]}</td><td style="font-weight:700;color:${r[7]<r[6]?"#dc3545":r[7]<r[8]?"#ffc107":"#198754"};">${(r[7]/r[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
+    criticalInfo = `Most critical school is ${schools[0][5]} at ${(schools[0][7]/schools[0][8]*100).toFixed(1)}%.`;
+  }
+
+  container.innerHTML = html;
+  const scopeTitle = m || t || w || d || "Punjab";
+  document.getElementById("ins-narrative-title").innerText = achPct < 80 ? "Critical Alert" : achPct < 90 ? "Needs Improvement" : "Good Performance";
+  document.getElementById("ins-narrative-box").style.background = achPct < 80 ? "#fff5f5" : achPct < 90 ? "#fffbeb" : "#f0fdf4";
+  document.getElementById("ins-narrative").innerText = `${scopeTitle}: ${achPct}% achievement. Enrollment ${deltaMsg} today across ${filtered.length} schools. ${criticalInfo}`;
+}
+
+function closeInsights() { document.getElementById("insightsModal").style.display = "none"; }
+
+/* TABLE PDF EXPORT */
+function exportToPDF() {
+  const { jsPDF } = window.jspdf;
+  
+  if (!fullTableData || fullTableData.length === 0) {
+    alert("Please load a table first before exporting.");
+    return;
+  }
+
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const title = document.getElementById("tableLabel").innerText;
+  
+  doc.setFontSize(16);
+  doc.setTextColor(30, 58, 95);
+  doc.text(title, 14, 15);
+  
+  doc.setFontSize(8);
+  doc.setTextColor(100);
+  doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 20);
+  doc.text("DEA Layyah Enrollment Monitoring by SheeraZ", 14, 24);
+
+  const isSchoolTable = fullTableData[0].emis !== undefined;
+  
+  let head, body, colStyles;
+
+  if (isSchoolTable) {
+    head = [['Sr.', 'EMIS', 'School Name', 'Markaz', 'Base', 'Curr', 'Delta', 'Targ', 'Ach%']];
+    body = fullTableData.map((s, i) => {
+      const gap = s.cur - s.bas;
+      const gapText = gap > 0 ? `+${gap}` : gap;
+      return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
+    });
+    colStyles = {
+      0: { cellWidth: 8 }, 1: { cellWidth: 18 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }
+    };
+  } else {
+    head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%']];
+    body = fullTableData.map((s, i) => {
+      const gap = s.cur - s.bas;
+      const gapText = gap > 0 ? `+${gap}` : gap;
+      return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
+    });
+    colStyles = {
+      0: { cellWidth: 10 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }
+    };
+  }
+
+  doc.autoTable({
+    startY: 30, head: head, body: body, theme: 'striped', styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 95], textColor: 255 }, columnStyles: colStyles,
+    didParseCell: function(data) {
+      const lastIdx = isSchoolTable ? 8 : 6;
+      if (data.section === 'body' && data.column.index === lastIdx) {
+        const val = parseFloat(data.cell.raw);
+        if (val < 80) data.cell.styles.textColor = [220, 53, 69];
+        else if (val < 90) data.cell.styles.textColor = [253, 126, 20];
+        else data.cell.styles.textColor = [25, 135, 84];
       }
-      
-      buildFilterHierarchy();
-      populateDistricts();
-      
-      document.getElementById('loader').style.display = 'none';
-      document.getElementById('statusNotice').innerHTML = '✅ <strong>Data Connected!</strong> Your dashboard is now live from Google Sheets. Updates every 5 minutes.';
-      document.getElementById('statusNotice').className = 'success-notice';
-      document.getElementById('reportTimestamp').innerText = 'Connected to Google Sheets • ' + new Date().toLocaleString('en-PK', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Karachi' });
-      
-      updateStats();
-    } catch (error) {
-      console.error('Error loading data:', error);
-      document.getElementById('loaderText').innerText = '⚠️ Data Connection Failed';
-      document.getElementById('statusNotice').innerHTML = '❌ <strong>Connection Error:</strong> ' + error.message + '. Check that your Google Sheet is publicly shared.';
-      document.getElementById('statusNotice').className = 'data-source-notice';
-      setTimeout(() => {
-        document.getElementById('loader').style.display = 'none';
-      }, 3000);
-    }
-  }
-
-  // Build filter hierarchy (District > Wing > Tehsil > Markaz)
-  function buildFilterHierarchy() {
-    filterHierarchy = {};
-    masterData.forEach(r => {
-      const d = r[0], w = r[3], t = r[1], m = r[2];
-      if (!filterHierarchy[d]) filterHierarchy[d] = {};
-      if (!filterHierarchy[d][w]) filterHierarchy[d][w] = {};
-      if (!filterHierarchy[d][w][t]) filterHierarchy[d][w][t] = [];
-      if (!filterHierarchy[d][w][t].includes(m)) filterHierarchy[d][w][t].push(m);
-    });
-  }
-
-  // Populate district dropdown
-  function populateDistricts() {
-    const select = document.getElementById('district');
-    select.innerHTML = '<option value="">All Districts</option>';
-    Object.keys(filterHierarchy).sort().forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.innerText = d;
-      select.appendChild(opt);
-    });
-  }
-
-  // Update wing dropdown based on selected district
-  function updateWing() {
-    const dist = document.getElementById('district').value;
-    const select = document.getElementById('wing');
-    select.innerHTML = '<option value="">All Wings</option>';
-    
-    if (dist && filterHierarchy[dist]) {
-      Object.keys(filterHierarchy[dist]).sort().forEach(w => {
-        const opt = document.createElement('option');
-        opt.value = w;
-        opt.innerText = w;
-        select.appendChild(opt);
-      });
-    }
-    
-    updateTehsil();
-  }
-
-  // Update tehsil dropdown
-  function updateTehsil() {
-    const dist = document.getElementById('district').value;
-    const wing = document.getElementById('wing').value;
-    const select = document.getElementById('tehsil');
-    select.innerHTML = '<option value="">All Tehsils</option>';
-    
-    if (dist && wing && filterHierarchy[dist] && filterHierarchy[dist][wing]) {
-      Object.keys(filterHierarchy[dist][wing]).sort().forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t;
-        opt.innerText = t;
-        select.appendChild(opt);
-      });
-    }
-    
-    updateMarkaz();
-  }
-
-  // Update markaz dropdown
-  function updateMarkaz() {
-    const dist = document.getElementById('district').value;
-    const wing = document.getElementById('wing').value;
-    const teh = document.getElementById('tehsil').value;
-    const select = document.getElementById('markaz');
-    select.innerHTML = '<option value="">All Markazes</option>';
-    
-    if (dist && wing && teh && filterHierarchy[dist] && filterHierarchy[dist][wing] && filterHierarchy[dist][wing][teh]) {
-      filterHierarchy[dist][wing][teh].forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.innerText = m;
-        select.appendChild(opt);
-      });
-    }
-  }
-
-  // Update KPI stats
-  function updateStats() {
-    const dist = document.getElementById('district').value;
-    const wing = document.getElementById('wing').value;
-    const teh = document.getElementById('tehsil').value;
-    const markaz = document.getElementById('markaz').value;
-    
-    let filtered = masterData.filter(r => {
-      if (dist && r[0] !== dist) return false;
-      if (wing && r[3] !== wing) return false;
-      if (teh && r[1] !== teh) return false;
-      if (markaz && r[2] !== markaz) return false;
-      return true;
-    });
-
-    const current = filtered.reduce((sum, r) => sum + (r[7] || 0), 0);
-    const target = filtered.reduce((sum, r) => sum + (r[8] || 0), 0);
-    const ach = target ? ((current / target) * 100).toFixed(1) : 0;
-
-    document.getElementById('current').innerText = current;
-    document.getElementById('target').innerText = target;
-    document.getElementById('achievement').innerText = ach + '%';
-  }
-
-  // Load chart data
-  function loadData() {
-    updateStats();
-    const dist = document.getElementById('district').value;
-    const wing = document.getElementById('wing').value;
-    const teh = document.getElementById('tehsil').value;
-    const markaz = document.getElementById('markaz').value;
-    
-    let filtered = masterData.filter(r => {
-      if (dist && r[0] !== dist) return false;
-      if (wing && r[3] !== wing) return false;
-      if (teh && r[1] !== teh) return false;
-      if (markaz && r[2] !== markaz) return false;
-      return true;
-    });
-
-    fullTableData = filtered.map(r => ({
-      name: r[5], emis: r[4], dist: r[0], wing: r[3], teh: r[1], markaz: r[2],
-      bas: r[6], cur: r[7], tar: r[8], prev: r[9],
-      ach: r[8] ? ((r[7] / r[8]) * 100) : 0
-    }));
-
-    const labels = fullTableData.map(s => s.name);
-    const current = fullTableData.map(s => s.cur);
-    const target = fullTableData.map(s => s.tar);
-
-    document.getElementById('tableSection').style.display = 'none';
-    const ctx = document.getElementById('chartParent');
-    ctx.innerHTML = '<canvas id="myChart"></canvas>';
-
-    if (currentChart) currentChart.destroy();
-    currentChart = new Chart(document.getElementById('myChart'), {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: 'Current', data: current, backgroundColor: '#0d6efd' },
-          { label: 'Target', data: target, backgroundColor: '#ffc107' }
-        ]
-      },
-      options: { 
-        responsive: true, 
-        maintainAspectRatio: true,
-        scales: { 
-          y: { 
-            beginAtZero: true,
-            ticks: { stepSize: 10 }
-          } 
-        },
-        plugins: {
-          legend: { display: true, position: 'top' }
-        }
+      const gapIdx = isSchoolTable ? 6 : 4;
+      if (data.section === 'body' && data.column.index === gapIdx) {
+        const val = parseInt(data.cell.raw);
+        if (val > 0) data.cell.styles.textColor = [25, 135, 84];
+        else if (val < 0) data.cell.styles.textColor = [220, 53, 69];
       }
-    });
-  }
+    }
+  });
 
-  // Load table
-  function loadTable(type) {
-    currentFilterType = type;
-    const dist = document.getElementById('district').value;
-    const wing = document.getElementById('wing').value;
-    const teh = document.getElementById('tehsil').value;
-    const markaz = document.getElementById('markaz').value;
-    
-    let filtered = masterData.filter(r => {
-      if (dist && r[0] !== dist) return false;
-      if (wing && r[3] !== wing) return false;
-      if (teh && r[1] !== teh) return false;
-      if (markaz && r[2] !== markaz) return false;
-      return true;
-    });
+  doc.save(getExportFileName("pdf"));
+}
 
-    fullTableData = filtered.map(r => ({
-      name: r[5], emis: r[4], dist: r[0], wing: r[3], teh: r[1], markaz: r[2],
-      bas: r[6], cur: r[7], tar: r[8], prev: r[9],
-      ach: r[8] ? ((r[7] / r[8]) * 100) : 0
-    }));
+/* CSV EXPORT */
+function exportToCSV() {
+  const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
+  let csv = isSchool ? "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Baseline,Current,Delta,Target,Ach%\n" : "Sr.,Name,Baseline,Current,Delta,Target,Ach%\n";
+  fullTableData.forEach((s, i) => {
+    let delta = s.cur - s.prev;
+    if (isSchool) csv += `"${i+1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
+    else csv += `"${i+1}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
+  link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
+}
 
-    if (type === 'below_baseline') fullTableData = fullTableData.filter(s => s.cur < s.bas);
-    else if (type === 'below_target') fullTableData = fullTableData.filter(s => s.cur < s.tar && s.cur >= s.bas);
-    else if (type === 'above_baseline') fullTableData = fullTableData.filter(s => s.cur >= s.bas);
-    else if (type === 'above_target') fullTableData = fullTableData.filter(s => s.cur >= s.tar);
-    else if (type === 'all_schools') fullTableData = fullTableData.sort((a, b) => a.name.localeCompare(b.name));
+function getExportFileName(ext) {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  let nameParts = ["DEA"]; if (d) nameParts.push(d); if (w) nameParts.push(w); if (t) nameParts.push(t); if (m) nameParts.push(m);
+  return `${nameParts.join("_").replace(/\s+/g, '')}_${currentFilterType}.${ext}`;
+}
 
-    renderTable();
-  }
+/* INSIGHT PDF EXPORT */
+function exportInsightPDF() {
+  const { jsPDF } = window.jspdf;
+  const captureArea = document.getElementById("captureArea");
+  const scope = document.getElementById("insightScopeLabel").innerText;
+  const breadcrumb = document.getElementById("insightBreadcrumb").innerText;
+  const timestamp = new Date().toLocaleString('en-PK', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Karachi' });
 
-  // Render table
-  function renderTable() {
-    const table = document.getElementById('dataTable');
-    table.innerHTML = '<thead><tr><th>#</th><th>School</th><th>EMIS</th><th>Baseline</th><th>Current</th><th>Target</th><th>Ach%</th></tr></thead>';
-    
-    fullTableData.forEach((s, i) => {
-      const row = table.insertRow();
-      const achColor = s.ach >= 90 ? 'text-success' : s.ach >= 80 ? 'text-warning' : 'text-danger';
-      row.innerHTML = `<td>${i+1}</td><td>${s.name}</td><td>${s.emis}</td><td>${s.bas}</td><td>${s.cur}</td><td>${s.tar}</td><td class="${achColor} fw-bold">${s.ach.toFixed(1)}%</td>`;
-    });
+  const btns = document.querySelectorAll('.no-print');
+  btns.forEach(b => b.style.opacity = '0');
 
-    document.getElementById('tableSection').style.display = 'block';
-    if (currentChart) currentChart.destroy();
-    document.getElementById('chartParent').innerHTML = '';
-  }
+  html2canvas(captureArea, {
+    scale: 2, useCORS: true, backgroundColor: "#fbfbfb", logging: false,
+    onclone: (clonedDoc) => {
+      const area = clonedDoc.getElementById("captureArea");
+      area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
+      clonedDoc.querySelectorAll('.table-responsive, #markaz-school-table-scroll').forEach(el => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
+      const stampDiv = clonedDoc.createElement("div");
+      stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
+      stampDiv.innerHTML = `<div><strong>DEA LAYYAH ENROLLMENT INTELLIGENCE</strong><br><small style="opacity:0.8">${breadcrumb}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
+      area.insertBefore(stampDiv, area.firstChild);
+      clonedDoc.querySelectorAll('.no-print').forEach(b => b.style.display = 'none');
+    }
+  }).then(canvas => {
+    btns.forEach(b => b.style.opacity = '1');
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const innerWidth = pageWidth - (margin * 2);
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
+    const finalDoc = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidth, pdfImgHeight + (margin * 2)] });
+    finalDoc.addImage(imgData, 'PNG', margin, margin, innerWidth, pdfImgHeight, undefined, 'FAST');
+    const dateStr = new Date().toISOString().split('T')[0];
+    finalDoc.save(`Intelligence_Report_${scope}_${dateStr}.pdf`);
+  }).catch(err => {
+    console.error("Export Error:", err);
+    btns.forEach(b => b.style.opacity = '1');
+    alert("PDF export failed. Check console for details.");
+  });
+}
 
-  // Show insights (placeholder)
-  function showInsights() {
-    alert('Insights feature coming soon! Will show detailed analysis of selected region.');
-  }
-
-  // Close insights modal
-  function closeInsights() {
-    document.getElementById('insightsModal').style.display = 'none';
-  }
-
-  // Export insights PDF (placeholder)
-  function exportInsightPDF() {
-    alert('PDF export feature will be available in next update');
-  }
+// Global scope for missing elements
+let current = document.createElement("div");
+Object.defineProperty(Object.getPrototypeOf(current), 'innerText', { get: function() { return '0'; } });
+document.body.appendChild(current);
 </script>
 
 </body>
