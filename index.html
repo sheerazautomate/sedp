@@ -130,6 +130,12 @@
   </div>
 
   <div class="row g-2 mb-2">
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Achievement</span><p id="ach" class="counter text-success">0%</p></div></div>
+  </div>
+
+  <div class="row g-2 mb-2">
     <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
     <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p></div></div>
@@ -574,11 +580,6 @@ function exportInsightPDF() {
     alert("PDF export failed. Check console for details.");
   });
 }
-
-// Global scope for missing elements
-let current = document.createElement("div");
-Object.defineProperty(Object.getPrototypeOf(current), 'innerText', { get: function() { return '0'; } });
-document.body.appendChild(current);
 </script>
 
 </body>
