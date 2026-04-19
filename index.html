@@ -172,7 +172,8 @@
       
       // Change this URL based on your data source setup
       // See DATA_SETUP.md for instructions
-      const response = await fetch('data.json'); // or your Google Sheets API URL
+      const data = await convertGoogleSheetData();
+masterData = data; // or your Google Sheets API URL
       
       if (!response.ok) throw new Error('Data file not found');
       
