@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @keyframes spin{100%{transform:rotate(360deg)}}
+    body { background-color: #f4f7f6; font-family: system-ui, -apple-system, sans-serif; }
+    .chart-wrapper { width: 100%; overflow-y: auto; background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-top: 15px; }
+    #chartParent { position: relative; width: 100%; min-height: 500px; }
+    .kpi-group { background: #ffffff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 10px; }
+    .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #6c757d; font-weight: 700; display: block; }
+    .counter { font-size: 1.3rem; font-weight: 700; line-height: 1; margin-bottom: 0; }
+    .filter-row .form-select, .filter-row .btn { font-size: 0.75rem; padding: 6px 4px; }
+    .table-responsive { font-size: 0.75rem; background: white; border-radius: 8px; }
+    .hidden { display: none; }
+    .border-end-custom { border-right: 1px solid #eee; }
+
+    /* INSIGHT MODAL */
+    .insight-modal-container { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.75); z-index:3000; display:none; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(6px); }
+    .insight-content { background:#fbfbfb; width:100%; max-width:960px; max-height:95vh; overflow-y:auto; border-radius:24px; position:relative; padding:30px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid #e2e8f0; }
+    .section-header { font-size:0.75rem; color:#1e293b; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:15px; border-bottom:2px solid #e2e8f0; padding-bottom:8px; }
+    .info-card-nb { background:white; border:1px solid #e2e8f0; padding:20px; border-radius:16px; height:100%; }
+    .accent-blue { border-left:6px solid #2563eb; }
+    .accent-purple { border-left:6px solid #7c3aed; }
+    .accent-orange { border-top:6px solid #ea580c; }
+    .accent-green { border-left:6px solid #16a34a; }
+    .accent-red { border-left:6px solid #dc2626; }
+    .no-print { visibility:visible; }
+    .ach-bar-wrap { background:#e2e8f0; border-radius:999px; height:10px; margin-top:6px; overflow:hidden; }
+    .ach-bar-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
+    .scope-breadcrumb { font-size:0.7rem; color:#64748b; margin-top:4px; letter-spacing:0.3px; }
+    .scope-breadcrumb span { color:#1e40af; font-weight:700; }
+    .insight-mini-table { font-size:0.72rem; width:100%; border-collapse:collapse; }
+    .insight-mini-table th { background:#f1f5f9; padding:5px 8px; text-align:left; font-weight:700; color:#374151; }
+    .insight-mini-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; }
+    .rank-badge { display:inline-block; width:20px; height:20px; border-radius:50%; font-size:0.6rem; font-weight:700; text-align:center; line-height:20px; }
+    .data-source-notice { background: #fff3cd; border: 1px solid #ffc107; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; }
+  </style>
+</head>
+
+<body>
+<div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
+  <div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
+  <h6 id="loaderText">Loading dashboard...</h6>
+</div>
+
+<div id="insightsModal" class="insight-modal-container">
+  <div class="insight-content" id="captureArea">
+    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+      <div>
+        <h2 class="fw-bold text-dark mb-1" style="letter-spacing:-1px">Scope Intelligence</h2>
+        <div id="insightBreadcrumb" class="scope-breadcrumb"></div>
+        <span id="insightScopeLabel" class="badge bg-primary px-3 rounded-pill mt-1"></span>
+      </div>
+      <div class="d-flex gap-2 no-print">
+        <button class="btn btn-danger btn-sm fw-bold rounded-pill px-3" onclick="exportInsightPDF()">Export Full PDF</button>
+        <button class="btn-close ms-2" onclick="closeInsights()"></button>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-3">
+      <div class="col-md-5">
+        <div class="info-card-nb accent-blue h-100">
+          <div class="section-header">Enrollment Overview</div>
+          <div class="row g-3">
+            <div class="col-6"><small class="stat-label">Current</small><span id="ins-cur" class="h4 fw-bold text-primary">0</span></div>
+            <div class="col-6"><small class="stat-label">Baseline</small><span id="ins-base" class="h4 fw-bold">0</span></div>
+            <div class="col-6 border-top pt-2"><small class="stat-label">Target</small><span id="ins-tar" class="h4 fw-bold">0</span></div>
+            <div class="col-6 border-top pt-2"><small class="stat-label">Achievement</small><span id="ins-ach" class="h4 fw-bold">0%</span></div>
+          </div>
+          <div class="mt-3">
+            <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Progress to Target</span><span id="ins-ach-bar-label">0%</span></div>
+            <div class="ach-bar-wrap"><div id="ins-ach-bar" class="ach-bar-fill" style="width:0%;"></div></div>
+          </div>
+          <div class="mt-2">
+            <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Progress to Baseline</span><span id="ins-base-bar-label">0%</span></div>
+            <div class="ach-bar-wrap"><div id="ins-base-bar" class="ach-bar-fill" style="width:0%;background:#0d6efd;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-7">
+        <div class="info-card-nb accent-purple h-100">
+          <div class="section-header">School Health Distribution (<span id="ins-sch-total">0</span> schools)</div>
+          <div class="row align-items-center">
+            <div class="col-7" style="position:relative;height:160px;"><canvas id="insightDonut"></canvas></div>
+            <div class="col-5">
+              <div class="mb-2 p-2 rounded" style="background:#fff3f3;border-left:4px solid #dc3545;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Baseline</div><div id="ins-sch-bb" class="fw-bold text-danger" style="font-size:1.4rem;">0</div></div>
+              <div class="mb-2 p-2 rounded" style="background:#fffbf0;border-left:4px solid #ffc107;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Target</div><div id="ins-sch-bt" class="fw-bold text-warning" style="font-size:1.4rem;">0</div></div>
+              <div class="p-2 rounded" style="background:#f0fff4;border-left:4px solid #198754;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Above Target</div><div id="ins-sch-at" class="fw-bold text-success" style="font-size:1.4rem;">0</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="ins-dynamic-section" class="row g-4 mb-3"></div>
+    <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#1d4ed8;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
+  </div>
+</div>
+
+<div class="container py-2">
+  <div class="data-source-notice">
+    ⚠️ <strong>Data Setup Required:</strong> This dashboard is ready but needs data. See the <a href="DATA_SETUP.md" target="_blank">Data Setup Guide</a> to connect your Google Sheet or upload data.
+  </div>
+
+  <div class="text-center mb-2">
+    <h5 class="fw-bold mb-0">DEA Layyah Enrollment Dashboard</h5>
+    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Hosted on GitHub Pages</p>
+  </div>
+
+  <div class="row g-1 mb-2 filter-row">
+    <div class="col"><select id="district" class="form-select" onchange="updateWing()"><option>Select District</option></select></div>
+    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"><option>Select Wing</option></select></div>
+    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"><option>Select Tehsil</option></select></div>
+    <div class="col"><select id="markaz" class="form-select"><option>Select Markaz</option></select></div>
+    <div class="col-auto">
+      <div class="btn-group w-100">
+        <button class="btn btn-primary btn-sm fw-bold" onclick="loadData()">Chart</button>
+        <button class="btn btn-info btn-sm fw-bold text-white" onclick="loadTable('all')">Table</button>
+        <button class="btn btn-warning btn-sm fw-bold text-white" onclick="showInsights()">Insights</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-1 mb-2">
+    <div class="col"><button class="btn btn-outline-danger btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_baseline')">Below Base</button></div>
+    <div class="col"><button class="btn btn-outline-warning btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_target')">Below Targ</button></div>
+    <div class="col"><button class="btn btn-outline-success btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('above_baseline')">Above Base</button></div>
+    <div class="col"><button class="btn btn-success btn-sm w-100" style="font-size:0.65rem;background-color:#198754;" onclick="loadTable('above_target')">Above Targ</button></div>
+    <div class="col"><button class="btn btn-primary btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('all_schools')">All Schools</button></div>
+  </div>
+
+  <div class="kpi-group text-center">
+    <div class="row g-0">
+      <div class="col-4 border-end-custom"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div>
+      <div class="col-4 border-end-custom"><span class="stat-label">Target</span><p id="current" class="counter text-dark">0</p></div>
+      <div class="col-4"><span class="stat-label">Achievement</span><p id="achievement" class="counter text-success">0%</p></div>
+    </div>
+  </div>
+
+  <div class="chart-wrapper">
+    <div id="chartParent"></div>
+  </div>
+  <div id="tableSection" class="mt-3" style="display:none;">
+    <div class="table-responsive" style="max-height:500px;">
+      <table id="dataTable" class="table table-sm table-hover mb-0"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+  let masterData = [];
+  let filterHierarchy = {};
+  let fullTableData = [];
+  let currentChart = null;
+  let currentFilterType = "all";
+
+  // Initialize on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('reportTimestamp').innerText = new Date().toLocaleString('en-PK', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Karachi' });
+    loadMasterData();
+  });
+
+  // Load data from your data source
+  async function loadMasterData() {
+    try {
+      document.getElementById('loaderText').innerText = 'Loading data...';
+      
+      // Change this URL based on your data source setup
+      // See DATA_SETUP.md for instructions
+      const response = await fetch('data.json'); // or your Google Sheets API URL
+      
+      if (!response.ok) throw new Error('Data file not found');
+      
+      const data = await response.json();
+      masterData = data;
+      buildFilterHierarchy();
+      populateDistricts();
+      
+      document.getElementById('loader').style.display = 'none';
+      updateStats();
+    } catch (error) {
+      console.error('Error loading data:', error);
+      document.getElementById('loaderText').innerText = '⚠️ Data loading failed. Check setup.';
+      setTimeout(() => {
+        document.getElementById('loader').style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  // Build filter hierarchy (District > Wing > Tehsil > Markaz)
+  function buildFilterHierarchy() {
+    filterHierarchy = {};
+    masterData.forEach(r => {
+      const d = r[0], w = r[3], t = r[1], m = r[2];
+      if (!filterHierarchy[d]) filterHierarchy[d] = {};
+      if (!filterHierarchy[d][w]) filterHierarchy[d][w] = {};
+      if (!filterHierarchy[d][w][t]) filterHierarchy[d][w][t] = [];
+      if (!filterHierarchy[d][w][t].includes(m)) filterHierarchy[d][w][t].push(m);
+    });
+  }
+
+  // Populate district dropdown
+  function populateDistricts() {
+    const select = document.getElementById('district');
+    select.innerHTML = '<option value="">All Districts</option>';
+    Object.keys(filterHierarchy).forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.innerText = d;
+      select.appendChild(opt);
+    });
+  }
+
+  // Update wing dropdown based on selected district
+  function updateWing() {
+    const dist = document.getElementById('district').value;
+    const select = document.getElementById('wing');
+    select.innerHTML = '<option value="">All Wings</option>';
+    
+    if (dist && filterHierarchy[dist]) {
+      Object.keys(filterHierarchy[dist]).forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = w;
+        opt.innerText = w;
+        select.appendChild(opt);
+      });
+    }
+    
+    updateTehsil();
+  }
+
+  // Update tehsil dropdown
+  function updateTehsil() {
+    const dist = document.getElementById('district').value;
+    const wing = document.getElementById('wing').value;
+    const select = document.getElementById('tehsil');
+    select.innerHTML = '<option value="">All Tehsils</option>';
+    
+    if (dist && wing && filterHierarchy[dist] && filterHierarchy[dist][wing]) {
+      Object.keys(filterHierarchy[dist][wing]).forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.innerText = t;
+        select.appendChild(opt);
+      });
+    }
+    
+    updateMarkaz();
+  }
+
+  // Update markaz dropdown
+  function updateMarkaz() {
+    const dist = document.getElementById('district').value;
+    const wing = document.getElementById('wing').value;
+    const teh = document.getElementById('tehsil').value;
+    const select = document.getElementById('markaz');
+    select.innerHTML = '<option value="">All Markazes</option>';
+    
+    if (dist && wing && teh && filterHierarchy[dist] && filterHierarchy[dist][wing] && filterHierarchy[dist][wing][teh]) {
+      filterHierarchy[dist][wing][teh].forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = m;
+        select.appendChild(opt);
+      });
+    }
+  }
+
+  // Update KPI stats
+  function updateStats() {
+    const dist = document.getElementById('district').value;
+    const wing = document.getElementById('wing').value;
+    const teh = document.getElementById('tehsil').value;
+    const markaz = document.getElementById('markaz').value;
+    
+    let filtered = masterData.filter(r => {
+      if (dist && r[0] !== dist) return false;
+      if (wing && r[3] !== wing) return false;
+      if (teh && r[1] !== teh) return false;
+      if (markaz && r[2] !== markaz) return false;
+      return true;
+    });
+
+    const current = filtered.reduce((sum, r) => sum + (r[7] || 0), 0);
+    const baseline = filtered.reduce((sum, r) => sum + (r[6] || 0), 0);
+    const target = filtered.reduce((sum, r) => sum + (r[8] || 0), 0);
+    const ach = target ? ((current / target) * 100).toFixed(1) : 0;
+
+    document.getElementById('current').innerText = current;
+    document.getElementById('achievement').innerText = ach + '%';
+  }
+
+  // Load chart data
+  function loadData() {
+    updateStats();
+    const dist = document.getElementById('district').value;
+    const wing = document.getElementById('wing').value;
+    const teh = document.getElementById('tehsil').value;
+    const markaz = document.getElementById('markaz').value;
+    
+    let filtered = masterData.filter(r => {
+      if (dist && r[0] !== dist) return false;
+      if (wing && r[3] !== wing) return false;
+      if (teh && r[1] !== teh) return false;
+      if (markaz && r[2] !== markaz) return false;
+      return true;
+    });
+
+    fullTableData = filtered.map(r => ({
+      name: r[5], emis: r[4], dist: r[0], wing: r[3], teh: r[1], markaz: r[2],
+      bas: r[6], cur: r[7], tar: r[8], prev: r[9],
+      ach: r[8] ? ((r[7] / r[8]) * 100) : 0
+    }));
+
+    const labels = fullTableData.map(s => s.name);
+    const current = fullTableData.map(s => s.cur);
+    const target = fullTableData.map(s => s.tar);
+
+    document.getElementById('tableSection').style.display = 'none';
+    const ctx = document.getElementById('chartParent');
+    ctx.innerHTML = '<canvas id="myChart"></canvas>';
+
+    if (currentChart) currentChart.destroy();
+    currentChart = new Chart(document.getElementById('myChart'), {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Current', data: current, backgroundColor: '#0d6efd' },
+          { label: 'Target', data: target, backgroundColor: '#ffc107' }
+        ]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+  }
+
+  // Load table
+  function loadTable(type) {
+    currentFilterType = type;
+    const dist = document.getElementById('district').value;
+    const wing = document.getElementById('wing').value;
+    const teh = document.getElementById('tehsil').value;
+    const markaz = document.getElementById('markaz').value;
+    
+    let filtered = masterData.filter(r => {
+      if (dist && r[0] !== dist) return false;
+      if (wing && r[3] !== wing) return false;
+      if (teh && r[1] !== teh) return false;
+      if (markaz && r[2] !== markaz) return false;
+      return true;
+    });
+
+    fullTableData = filtered.map(r => ({
+      name: r[5], emis: r[4], dist: r[0], wing: r[3], teh: r[1], markaz: r[2],
+      bas: r[6], cur: r[7], tar: r[8], prev: r[9],
+      ach: r[8] ? ((r[7] / r[8]) * 100) : 0
+    }));
+
+    if (type === 'below_baseline') fullTableData = fullTableData.filter(s => s.cur < s.bas);
+    else if (type === 'below_target') fullTableData = fullTableData.filter(s => s.cur < s.tar && s.cur >= s.bas);
+    else if (type === 'above_baseline') fullTableData = fullTableData.filter(s => s.cur >= s.bas);
+    else if (type === 'above_target') fullTableData = fullTableData.filter(s => s.cur >= s.tar);
+
+    renderTable();
+  }
+
+  // Render table
+  function renderTable() {
+    const table = document.getElementById('dataTable');
+    table.innerHTML = '<thead><tr><th>School</th><th>EMIS</th><th>Baseline</th><th>Current</th><th>Target</th><th>Ach%</th></tr></thead>';
+    
+    fullTableData.forEach((s, i) => {
+      const row = table.insertRow();
+      row.innerHTML = `<td>${s.name}</td><td>${s.emis}</td><td>${s.bas}</td><td>${s.cur}</td><td>${s.tar}</td><td>${s.ach.toFixed(1)}%</td>`;
+    });
+
+    document.getElementById('tableSection').style.display = 'block';
+    if (currentChart) currentChart.destroy();
+    document.getElementById('chartParent').innerHTML = '';
+  }
+
+  // Show insights (placeholder)
+  function showInsights() {
+    alert('Insights feature coming soon!');
+  }
+
+  // Close insights modal
+  function closeInsights() {
+    document.getElementById('insightsModal').style.display = 'none';
+  }
+
+  // Export insights PDF (placeholder)
+  function exportInsightPDF() {
+    alert('PDF export feature will be available once data is connected');
+  }
+</script>
+
+</body>
+</html>
