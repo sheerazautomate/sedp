@@ -251,6 +251,7 @@ function updateWing() {
   document.getElementById("markaz").innerHTML = '<option value="">Markaz</option>';
   if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`);
   else { let wings = new Set(); Object.values(hierarchy).forEach(obj => Object.keys(obj).forEach(w => wings.add(w))); Array.from(wings).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
+  loadData(); // Auto-load chart on filter change
 }
 
 function updateTehsil() {
@@ -260,6 +261,7 @@ function updateTehsil() {
   if (d) { if(hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach(t => tehsils.add(t)); }
   else { Object.values(hierarchy).forEach(dist => { if(dist[w]) Object.keys(dist[w]).forEach(t => tehsils.add(t)); }); }
   Array.from(tehsils).sort().forEach(t => tEl.innerHTML += `<option value="${t}">${t}</option>`);
+  loadData(); // Auto-load chart on filter change
 }
 
 function updateMarkaz() {
@@ -269,6 +271,7 @@ function updateMarkaz() {
   if (d) { if(hierarchy[d][w][t]) hierarchy[d][w][t].forEach(m => markazs.add(m)); }
   else { Object.values(hierarchy).forEach(dist => { if(dist[w] && dist[w][t]) dist[w][t].forEach(m => markazs.add(m)); }); }
   Array.from(markazs).sort().forEach(m => mEl.innerHTML += `<option value="${m}">${m}</option>`);
+  loadData(); // Auto-load chart on filter change
 }
 
 function loadData() {
@@ -303,9 +306,46 @@ function loadData() {
 function drawChart(data) {
   const ctx = document.getElementById("chart"); if (chart) chart.destroy();
   const chartHeight = Math.max(500, data.length * 25); document.getElementById("chartParent").style.height = chartHeight + "px";
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2; // Determine which level we're at
+  
   chart = new Chart(ctx, {
-    type: 'bar', data: { labels: data.map(d => d.name), datasets: [{ data: data.map(d => d.ach.toFixed(1)), backgroundColor: data.map(d => d.color) }] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { y: { ticks: { autoSkip: false, font: { size: 9 } } } }, plugins: { legend: { display: false } } }
+    type: 'bar', 
+    data: { 
+      labels: data.map(d => d.name), 
+      datasets: [{ 
+        data: data.map(d => d.ach.toFixed(1)), 
+        backgroundColor: data.map(d => d.color) 
+      }] 
+    },
+    options: { 
+      indexAxis: 'y', 
+      responsive: true, 
+      maintainAspectRatio: false, 
+      scales: { y: { ticks: { autoSkip: false, font: { size: 9 } } } }, 
+      plugins: { legend: { display: false } },
+      onClick: (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+          const index = activeElements[0].index;
+          const selectedName = data[index].name;
+          
+          // Auto-filter based on current scope level
+          if (!d) { // If no district selected, clicking selects a district
+            document.getElementById("district").value = selectedName;
+            updateWing();
+          } else if (!w) { // If no wing selected, clicking selects a wing
+            document.getElementById("wing").value = selectedName;
+            updateTehsil();
+          } else if (!t) { // If no tehsil selected, clicking selects a tehsil
+            document.getElementById("tehsil").value = selectedName;
+            updateMarkaz();
+          } else if (!m) { // If no markaz selected, clicking selects a markaz
+            document.getElementById("markaz").value = selectedName;
+            loadData();
+          }
+        }
+      }
+    }
   });
 }
 
@@ -542,7 +582,6 @@ function getExportFileName(ext) {
 function exportInsightPDF() {
   const { jsPDF } = window.jspdf;
   const captureArea = document.getElementById("captureArea");
-  const scope = document.getElementById("insightScopeLabel").innerText;
   const breadcrumb = document.getElementById("insightBreadcrumb").innerText;
   const timestamp = new Date().toLocaleString('en-PK', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Karachi' });
 
@@ -572,8 +611,8 @@ function exportInsightPDF() {
     const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
     const finalDoc = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidth, pdfImgHeight + (margin * 2)] });
     finalDoc.addImage(imgData, 'PNG', margin, margin, innerWidth, pdfImgHeight, undefined, 'FAST');
-    const dateStr = new Date().toISOString().split('T')[0];
-    finalDoc.save(`Intelligence_Report_${scope}_${dateStr}.pdf`);
+    // Use same naming logic as CSV and table PDF exports
+    finalDoc.save(getExportFileName("pdf"));
   }).catch(err => {
     console.error("Export Error:", err);
     btns.forEach(b => b.style.opacity = '1');
