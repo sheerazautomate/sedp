@@ -183,7 +183,16 @@ async function convertGoogleSheetData() {
     const lines = csv.split('\n').slice(1); // Skip header
     
     const data = lines.map(line => {
-      const cols = line.split(',').map(c => c.trim());
+      // Safely split CSV line ignoring commas inside double quotes
+      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => {
+        let val = c.trim();
+        // Remove surrounding double quotes added by Google Sheets export
+        if (val.startsWith('"') && val.endsWith('"')) {
+          val = val.substring(1, val.length - 1).trim();
+        }
+        return val;
+      });
+
       return [
         cols[0],  // District
         cols[1],  // Tehsil
@@ -196,7 +205,7 @@ async function convertGoogleSheetData() {
         parseInt(cols[17]) || 0,  // Target
         parseInt(cols[21]) || 0   // Previous
       ];
-    }).filter(r => r[0]); // Remove empty rows
+    }).filter(r => r[0] && r[0].trim() !== ""); // Filter out true empty rows
     
     return data;
   } catch (error) {
