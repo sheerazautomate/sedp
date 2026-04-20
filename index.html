@@ -98,6 +98,46 @@
     </div>
     <div id="ins-dynamic-section" class="row g-4 mb-3"></div>
     <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#1d4ed8;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
+</div>
+</div>
+
+<!-- BREAKDOWN MODAL (NEW) -->
+<div id="breakdownModal" class="insight-modal-container">
+  <div class="insight-content" id="breakdownContent">
+    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+      <div>
+        <h2 class="fw-bold text-dark mb-1" style="letter-spacing:-1px" id="breakdownTitle">Breakdown View</h2>
+        <div id="breakdownBreadcrumb" class="scope-breadcrumb"></div>
+      </div>
+      <div class="d-flex gap-2 no-print">
+        <button class="btn btn-secondary btn-sm me-2" onclick="exportBreakdownCSV()">CSV</button>
+        <button class="btn btn-danger btn-sm fw-bold rounded-pill px-3" onclick="exportBreakdownPDF()">Export PDF</button>
+        <button class="btn-close ms-2" onclick="closeBreakdownModal()"></button>
+      </div>
+    </div>
+
+    <!-- BREAKDOWN CHART -->
+    <div id="breakdownChartWrapper" style="background:white;border-radius:12px;padding:15px;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div id="breakdownChartParent" style="position:relative;width:100%;min-height:500px;"><canvas id="breakdownChart"></canvas></div>
+    </div>
+
+    <!-- BREAKDOWN TABLE -->
+    <div id="breakdownTableWrapper" style="background:white;border-radius:12px;padding:15px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center">
+          <select id="breakdownPageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderBreakdownTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
+          <select id="breakdownSortOrder" class="form-select form-select-sm me-1" style="width:100px;" onchange="sortBreakdownData()"><option value="ach">Sort: Ach%</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
+        </div>
+        <span id="breakdownTableLabel" class="fw-bold text-primary small">BREAKDOWN LIST</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped">
+          <thead id="breakdownTableHead"></thead>
+          <tbody id="breakdownTableBody"></tbody>
+        </table>
+      </div>
+      <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="breakdownPagination"></ul></nav>
+    </div>
   </div>
 </div>
 
@@ -121,12 +161,11 @@
     </div>
   </div>
 
-  <div class="row g-1 mb-2">
-    <div class="col"><button class="btn btn-outline-danger btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_baseline')">Below Base</button></div>
-    <div class="col"><button class="btn btn-outline-warning btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_target')">Below Targ</button></div>
-    <div class="col"><button class="btn btn-outline-success btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('above_baseline')">Above Base</button></div>
-    <div class="col"><button class="btn btn-success btn-sm w-100" style="font-size:0.65rem;background-color:#198754;" onclick="loadTable('above_target')">Above Targ</button></div>
-    <div class="col"><button class="btn btn-primary btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('all_schools')">All Schools</button></div>
+  <div class="row g-1 mb-2 filter-row">
+    <div class="col"><select id="viewBySelect" class="form-select" style="font-size:0.75rem;"><option value="">View by...</option></select></div>
+    <div class="col-auto"><button class="btn btn-success btn-sm fw-bold" style="font-size:0.75rem;padding:6px 12px;" onclick="openBreakdownModal()">Update</button></div>
+    <div class="col" style="border-left:1px solid #ddd;padding-left:1rem;"><select id="schoolFilterSelect" class="form-select" style="font-size:0.75rem;"><option value="all">All Schools</option><option value="below_baseline">Below Baseline</option><option value="below_target">Below Target</option><option value="above_baseline">Above Baseline</option><option value="above_target">Above Target</option></select></div>
+    <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
   <div class="row g-2 mb-2">
@@ -235,6 +274,7 @@ window.onload = async () => {
     MASTER_DATA = data;
     hierarchy = buildHierarchy(data);
     setupDropdowns();
+    updateViewByDropdown();
     document.getElementById("reportTimestamp").innerText = `(Last sync: ${new Date().toLocaleString('en-PK')})`;
     showLoader("Processing 38k+ Schools...");
     loadData();
@@ -260,6 +300,7 @@ function updateWing() {
   document.getElementById("markaz").innerHTML = '<option value="">Markaz</option>';
   if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`);
   else { let wings = new Set(); Object.values(hierarchy).forEach(obj => Object.keys(obj).forEach(w => wings.add(w))); Array.from(wings).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
+  updateViewByDropdown();
   loadData(); // Auto-load chart on filter change
 }
 
@@ -270,6 +311,7 @@ function updateTehsil() {
   if (d) { if(hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach(t => tehsils.add(t)); }
   else { Object.values(hierarchy).forEach(dist => { if(dist[w]) Object.keys(dist[w]).forEach(t => tehsils.add(t)); }); }
   Array.from(tehsils).sort().forEach(t => tEl.innerHTML += `<option value="${t}">${t}</option>`);
+  updateViewByDropdown();
   loadData(); // Auto-load chart on filter change
 }
 
@@ -280,6 +322,7 @@ function updateMarkaz() {
   if (d) { if(hierarchy[d][w][t]) hierarchy[d][w][t].forEach(m => markazs.add(m)); }
   else { Object.values(hierarchy).forEach(dist => { if(dist[w] && dist[w][t]) dist[w][t].forEach(m => markazs.add(m)); }); }
   Array.from(markazs).sort().forEach(m => mEl.innerHTML += `<option value="${m}">${m}</option>`);
+  updateViewByDropdown();
   loadData(); // Auto-load chart on filter change
 }
 
@@ -581,10 +624,203 @@ function exportToCSV() {
   link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
 }
 
-function getExportFileName(ext) {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  let nameParts = ["DEA"]; if (d) nameParts.push(d); if (w) nameParts.push(w); if (t) nameParts.push(t); if (m) nameParts.push(m);
-  return `${nameParts.join("_").replace(/\s+/g, '')}_${currentFilterType}.${ext}`;
+let breakdownChart = null, breakdownFullData = [], breakdownCurrentPage = 1, breakdownCurrentFilterType = "all", breakdownLevel = "";
+
+function updateViewByDropdown() {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, viewSelect = document.getElementById("viewBySelect");
+  viewSelect.innerHTML = '<option value="">View by...</option>';
+  if (!d) { viewSelect.innerHTML += '<option value="wing">Breakdown by Wing</option>'; viewSelect.disabled = false; }
+  else if (!w) { viewSelect.innerHTML += '<option value="tehsil">Breakdown by Tehsil</option>'; viewSelect.disabled = false; }
+  else if (!t) { viewSelect.innerHTML += '<option value="markaz">Breakdown by Markaz</option>'; viewSelect.disabled = false; }
+  else { viewSelect.disabled = true; viewSelect.innerHTML = '<option value="">View by...</option>'; }
+}
+
+function openBreakdownModal() {
+  const selectedOption = document.getElementById("viewBySelect").value;
+  if (!selectedOption) { alert("Please select a breakdown option"); return; }
+  
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value;
+  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t));
+  
+  let breakdownData = {}, keyIdx;
+  if (selectedOption === "wing") { keyIdx = 3; breakdownLevel = "wing"; }
+  else if (selectedOption === "tehsil") { keyIdx = 1; breakdownLevel = "tehsil"; }
+  else if (selectedOption === "markaz") { keyIdx = 2; breakdownLevel = "markaz"; }
+  
+  filtered.forEach(r => {
+    const key = r[keyIdx];
+    if (!breakdownData[key]) breakdownData[key] = { name: key, bas:0, cur:0, tar:0, prev:0 };
+    breakdownData[key].bas += r[6]; breakdownData[key].cur += r[7]; breakdownData[key].tar += r[8]; breakdownData[key].prev += r[9];
+  });
+  
+  breakdownFullData = Object.values(breakdownData).map(item => {
+    item.ach = item.tar ? (item.cur / item.tar) * 100 : 0;
+    item.color = (item.cur < item.bas) ? "#dc3545" : (item.cur < item.tar) ? "#ffc107" : "#198754";
+    return item;
+  });
+  
+  sortBreakdownData();
+  drawBreakdownChart();
+  renderBreakdownTable();
+  
+  let bcParts = ['<span>Punjab</span>']; if (d) bcParts.push(`<span>${d}</span>`); if (w) bcParts.push(`<span>${w}</span>`); if (t) bcParts.push(`<span>${t}</span>`);
+  document.getElementById("breakdownBreadcrumb").innerHTML = bcParts.join(' &rarr; ');
+  document.getElementById("breakdownTitle").innerText = `Breakdown by ${selectedOption.charAt(0).toUpperCase() + selectedOption.slice(1)}`;
+  document.getElementById("breakdownModal").style.display = "flex";
+}
+
+function closeBreakdownModal() {
+  document.getElementById("breakdownModal").style.display = "none";
+  breakdownFullData = []; breakdownCurrentPage = 1;
+}
+
+function drawBreakdownChart() {
+  const ctx = document.getElementById("breakdownChart"); if (breakdownChart) breakdownChart.destroy();
+  const chartHeight = Math.max(400, breakdownFullData.length * 25); document.getElementById("breakdownChartParent").style.height = chartHeight + "px";
+  
+  breakdownChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: breakdownFullData.map(d => d.name),
+      datasets: [{
+        data: breakdownFullData.map(d => d.ach.toFixed(1)),
+        backgroundColor: breakdownFullData.map(d => d.color)
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { ticks: { autoSkip: false, font: { size: 9 } } } },
+      plugins: { legend: { display: false } },
+      onClick: (event, activeElements) => {
+        if (activeElements && activeElements.length > 0) {
+          const index = activeElements[0].index;
+          const selectedName = breakdownFullData[index].name;
+          
+          const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value;
+          if (breakdownLevel === "wing") {
+            document.getElementById("wing").value = selectedName;
+            updateTehsil();
+            closeBreakdownModal();
+          } else if (breakdownLevel === "tehsil") {
+            document.getElementById("tehsil").value = selectedName;
+            updateMarkaz();
+            closeBreakdownModal();
+          } else if (breakdownLevel === "markaz") {
+            document.getElementById("markaz").value = selectedName;
+            closeBreakdownModal();
+            loadData();
+          }
+        }
+      }
+    }
+  });
+}
+
+function sortBreakdownData() {
+  const val = document.getElementById("breakdownSortOrder").value;
+  breakdownFullData.sort((a, b) => {
+    if (val === 'name') return a.name.localeCompare(b.name);
+    if (val === 'emis') return (a.emis || "").localeCompare(b.emis || "");
+    if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || "");
+    return b.ach - a.ach;
+  });
+  breakdownCurrentPage = 1; renderBreakdownTable();
+}
+
+function renderBreakdownTable() {
+  const size = parseInt(document.getElementById("breakdownPageSize").value), start = (breakdownCurrentPage - 1) * size, pageData = breakdownFullData.slice(start, start + size);
+  document.getElementById("breakdownTableHead").innerHTML = `<tr><th>Sr.</th><th>Name</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr>`;
+  let html = "";
+  pageData.forEach((item, i) => {
+    let srNo = start + i + 1; let delta = item.cur - item.prev; let dIcon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→"; let dColor = delta > 0 ? "#198754" : delta < 0 ? "#dc3545" : "#6c757d";
+    html += `<tr style="cursor:pointer;" onclick="handleBreakdownRowClick('${item.name}')"><td>${srNo}</td><td><strong>${item.name}</strong></td><td>${item.bas.toLocaleString()}</td><td>${item.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${item.tar.toLocaleString()}</td><td class="fw-bold" style="color:${item.color}">${item.ach.toFixed(1)}%</td></tr>`;
+  });
+  document.getElementById("breakdownTableBody").innerHTML = html; renderBreakdownPagination();
+}
+
+function renderBreakdownPagination() {
+  const total = Math.ceil(breakdownFullData.length / parseInt(document.getElementById("breakdownPageSize").value));
+  let html = ""; for (let i = Math.max(1, breakdownCurrentPage-2); i <= Math.min(total, breakdownCurrentPage+2); i++) { html += `<li class="page-item ${i === breakdownCurrentPage ? 'active' : ''}"><a class="page-link" onclick="goToBreakdownPage(${i})">${i}</a></li>`; }
+  document.getElementById("breakdownPagination").innerHTML = html;
+}
+
+function goToBreakdownPage(p) { breakdownCurrentPage = p; renderBreakdownTable(); }
+
+function handleBreakdownRowClick(itemName) {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value;
+  if (breakdownLevel === "wing") {
+    document.getElementById("wing").value = itemName;
+    updateTehsil();
+    closeBreakdownModal();
+  } else if (breakdownLevel === "tehsil") {
+    document.getElementById("tehsil").value = itemName;
+    updateMarkaz();
+    closeBreakdownModal();
+  } else if (breakdownLevel === "markaz") {
+    document.getElementById("markaz").value = itemName;
+    closeBreakdownModal();
+    loadData();
+  }
+}
+
+function exportBreakdownCSV() {
+  let csv = "Sr.,Name,Baseline,Current,Delta,Target,Ach%\n";
+  breakdownFullData.forEach((item, i) => {
+    let delta = item.cur - item.prev;
+    csv += `"${i+1}","${item.name}",${item.bas},${item.cur},${delta},${item.tar},${item.ach.toFixed(2)}%\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
+  link.href = URL.createObjectURL(blob); link.setAttribute("download", `breakdown_${breakdownLevel}_${new Date().getTime()}.csv`); link.click();
+}
+
+function exportBreakdownPDF() {
+  const { jsPDF } = window.jspdf;
+  const captureArea = document.getElementById("breakdownContent");
+  const timestamp = new Date().toLocaleString('en-PK', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Karachi' });
+
+  const btns = document.querySelectorAll('.no-print');
+  btns.forEach(b => b.style.opacity = '0');
+
+  html2canvas(captureArea, {
+    scale: 2, useCORS: true, backgroundColor: "#fbfbfb", logging: false,
+    onclone: (clonedDoc) => {
+      const area = clonedDoc.getElementById("breakdownContent");
+      area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
+      clonedDoc.querySelectorAll('.table-responsive').forEach(el => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
+      const stampDiv = clonedDoc.createElement("div");
+      stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
+      stampDiv.innerHTML = `<div><strong>SED PUNJAB ENROLLMENT BREAKDOWN</strong><br><small style="opacity:0.8">By ${breakdownLevel}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
+      area.insertBefore(stampDiv, area.firstChild);
+      clonedDoc.querySelectorAll('.no-print').forEach(b => b.style.display = 'none');
+    }
+  }).then(canvas => {
+    btns.forEach(b => b.style.opacity = '1');
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const innerWidth = pageWidth - (margin * 2);
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
+    const finalDoc = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidth, pdfImgHeight + (margin * 2)] });
+    finalDoc.addImage(imgData, 'PNG', margin, margin, innerWidth, pdfImgHeight, undefined, 'FAST');
+    finalDoc.save(`breakdown_${breakdownLevel}_${new Date().getTime()}.pdf`);
+  }).catch(err => {
+    console.error("Export Error:", err);
+    btns.forEach(b => b.style.opacity = '1');
+    alert("PDF export failed. Check console for details.");
+  });
+}
+
+function applySchoolFilter() {
+  const filterType = document.getElementById("schoolFilterSelect").value;
+  if (filterType === "all") loadTable('all_schools');
+  else if (filterType === "below_baseline") loadTable('below_baseline');
+  else if (filterType === "below_target") loadTable('below_target');
+  else if (filterType === "above_baseline") loadTable('above_baseline');
+  else if (filterType === "above_target") loadTable('above_target');
 }
 
 /* INSIGHT PDF EXPORT */
