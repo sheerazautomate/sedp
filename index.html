@@ -623,6 +623,11 @@ function exportToCSV() {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
   link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
 }
+function getExportFileName(ext) {
+  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
+  let nameParts = ["DEA"]; if (d) nameParts.push(d); if (w) nameParts.push(w); if (t) nameParts.push(t); if (m) nameParts.push(m);
+  return `${nameParts.join("_").replace(/\s+/g, '')}_${currentFilterType}.${ext}`;
+}
 
 let breakdownChart = null, breakdownFullData = [], breakdownCurrentPage = 1, breakdownCurrentFilterType = "all", breakdownLevel = "";
 
