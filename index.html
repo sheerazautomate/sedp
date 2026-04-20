@@ -103,7 +103,7 @@
 
 <div class="container py-2">
   <div class="text-center mb-2">
-    <h5 class="fw-bold mb-0">DEA Layyah Enrollment Dashboard by SheeraZ</h5>
+    <h5 class="fw-bold mb-0">SED Punjab Enrollment Dashboard by SheeraZ</h5>
     <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Syncing...</p>
   </div>
 
@@ -517,7 +517,7 @@ function exportToPDF() {
   doc.setFontSize(8);
   doc.setTextColor(100);
   doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 20);
-  doc.text("DEA Layyah Enrollment Monitoring by SheeraZ", 14, 24);
+  doc.text("SED Punjab Enrollment Monitoring by SheeraZ", 14, 24);
 
   const isSchoolTable = fullTableData[0].emis !== undefined;
   
@@ -605,7 +605,7 @@ function exportInsightPDF() {
       clonedDoc.querySelectorAll('.table-responsive, #markaz-school-table-scroll').forEach(el => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
       const stampDiv = clonedDoc.createElement("div");
       stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
-      stampDiv.innerHTML = `<div><strong>DEA LAYYAH ENROLLMENT INTELLIGENCE</strong><br><small style="opacity:0.8">${breadcrumb}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
+      stampDiv.innerHTML = `<div><strong>SED PUNJAB ENROLLMENT INTELLIGENCE</strong><br><small style="opacity:0.8">${breadcrumb}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
       area.insertBefore(stampDiv, area.firstChild);
       clonedDoc.querySelectorAll('.no-print').forEach(b => b.style.display = 'none');
     }
