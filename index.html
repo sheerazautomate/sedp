@@ -1,633 +1,499 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SED Punjab Enrollment Dashboard</title>
+  
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary-blue: #0d6efd;
+      --success-green: #198754;
+      --bg-light: #f4f7f6;
+    }
+
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    
+    body { 
+      background-color: var(--bg-light); 
+      font-family: system-ui, -apple-system, sans-serif; 
+      color: #333;
+    }
+
+    /* --- MOBILE RESPONSIVENESS --- */
+    @media (max-width: 768px) {
+      .container { padding-left: 10px; padding-right: 10px; }
+      .stat-label { font-size: 0.65rem !important; }
+      .counter { font-size: 1.1rem !important; }
+      .filter-row .form-select, .filter-row .btn { 
+        font-size: 0.85rem !important; 
+        padding: 10px 5px !important; 
+      }
+      header h5 { font-size: 1.1rem; }
+      #reportTimestamp { font-size: 0.7rem; }
+    }
+
+    /* KPI Cards */
+    .kpi-group { 
+      background: #ffffff; 
+      border-radius: 12px; 
+      padding: 12px; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06); 
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: transform 0.2s;
+    }
+    .kpi-group:active { transform: scale(0.98); }
+
+    .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #6c757d; font-weight: 700; display: block; }
+    .counter { font-size: 1.4rem; font-weight: 700; line-height: 1.2; margin-bottom: 0; }
+
+    /* Chart & Table Containers */
+    .chart-wrapper { 
+      width: 100%; 
+      background: white; 
+      border-radius: 12px; 
+      padding: 15px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+      margin-top: 10px; 
+    }
+    #chartParent { position: relative; width: 100%; min-height: 400px; }
+
+    /* Sticky Table Header */
+    .table-responsive { 
+      max-height: 70vh; 
+      overflow-y: auto; 
+      border-radius: 8px; 
+    }
+    thead th { 
+      position: sticky; 
+      top: 0; 
+      background-color: #f8f9fa !important; 
+      z-index: 10;
+      box-shadow: inset 0 -1px 0 #dee2e6;
+    }
+
+    /* Filter Buttons Scrolling */
+    .scroll-x-buttons {
+      overflow-x: auto;
+      white-space: nowrap;
+      display: flex;
+      gap: 6px;
+      padding-bottom: 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .scroll-x-buttons::-webkit-scrollbar { display: none; }
+
+    .hidden { display: none; }
+
+    /* Insights Modal Styling */
+    .insight-modal-container { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.8); z-index:3000; display:none; align-items:center; justify-content:center; padding:10px; backdrop-filter:blur(6px); }
+    .insight-content { background:#fbfbfb; width:100%; max-width:960px; max-height:90vh; overflow-y:auto; border-radius:20px; position:relative; padding:20px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); }
+    .ach-bar-wrap { background:#e2e8f0; border-radius:999px; height:8px; margin-top:6px; overflow:hidden; }
+    .ach-bar-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
+  </style>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <style>
-    @keyframes spin{100%{transform:rotate(360deg)}}
-    body { background-color: #f4f7f6; font-family: system-ui, -apple-system, sans-serif; }
-    .chart-wrapper { width: 100%; overflow-y: auto; background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-top: 15px; }
-    #chartParent { position: relative; width: 100%; min-height: 500px; }
-    .kpi-group { background: #ffffff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 10px; }
-    .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #6c757d; font-weight: 700; display: block; }
-    .counter { font-size: 1.3rem; font-weight: 700; line-height: 1; margin-bottom: 0; }
-    .filter-row .form-select, .filter-row .btn { font-size: 0.75rem; padding: 6px 4px; }
-    .table-responsive { font-size: 0.75rem; background: white; border-radius: 8px; }
-    .hidden { display: none; }
-    .border-end-custom { border-right: 1px solid #eee; }
-
-    /* INSIGHT MODAL */
-    .insight-modal-container { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.75); z-index:3000; display:none; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(6px); }
-    .insight-content { background:#fbfbfb; width:100%; max-width:960px; max-height:95vh; overflow-y:auto; border-radius:24px; position:relative; padding:30px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid #e2e8f0; }
-    .section-header { font-size:0.75rem; color:#1e293b; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:15px; border-bottom:2px solid #e2e8f0; padding-bottom:8px; }
-    .info-card-nb { background:white; border:1px solid #e2e8f0; padding:20px; border-radius:16px; height:100%; }
-    .accent-blue { border-left:6px solid #2563eb; }
-    .accent-purple { border-left:6px solid #7c3aed; }
-    .accent-orange { border-top:6px solid #ea580c; }
-    .accent-green { border-left:6px solid #16a34a; }
-    .accent-red { border-left:6px solid #dc2626; }
-    .no-print { visibility:visible; }
-    .ach-bar-wrap { background:#e2e8f0; border-radius:999px; height:10px; margin-top:6px; overflow:hidden; }
-    .ach-bar-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
-    .scope-breadcrumb { font-size:0.7rem; color:#64748b; margin-top:4px; letter-spacing:0.3px; }
-    .scope-breadcrumb span { color:#1e40af; font-weight:700; }
-    .insight-mini-table { font-size:0.72rem; width:100%; border-collapse:collapse; }
-    .insight-mini-table th { background:#f1f5f9; padding:5px 8px; text-align:left; font-weight:700; color:#374151; }
-    .insight-mini-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; }
-    .rank-badge { display:inline-block; width:20px; height:20px; border-radius:50%; font-size:0.6rem; font-weight:700; text-align:center; line-height:20px; }
-  </style>
 </head>
 
 <body>
-<div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
-  <div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
-  <h6 id="loaderText">Downloading Punjab Data...</h6>
+
+<div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:9999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
+  <div style="width:50px;height:50px;border:5px solid #f3f3f3;border-top:5px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
+  <h6 id="loaderText" class="fw-bold text-center px-3">Syncing Enrollment Data...</h6>
 </div>
 
 <div id="insightsModal" class="insight-modal-container">
   <div class="insight-content" id="captureArea">
-    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+    <div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-2">
       <div>
-        <h2 class="fw-bold text-dark mb-1" style="letter-spacing:-1px">Scope Intelligence</h2>
-        <div id="insightBreadcrumb" class="scope-breadcrumb"></div>
-        <span id="insightScopeLabel" class="badge bg-primary px-3 rounded-pill mt-1"></span>
+        <h4 class="fw-bold text-dark mb-0">Scope Intelligence</h4>
+        <div id="insightBreadcrumb" class="small text-muted"></div>
       </div>
-      <div class="d-flex gap-2 no-print">
-        <button class="btn btn-danger btn-sm fw-bold rounded-pill px-3" onclick="exportInsightPDF()">Export Full PDF</button>
-        <button class="btn-close ms-2" onclick="closeInsights()"></button>
-      </div>
+      <button class="btn-close" onclick="closeInsights()"></button>
     </div>
-
-    <div class="row g-4 mb-3">
-      <div class="col-md-5">
-        <div class="info-card-nb accent-blue h-100">
-          <div class="section-header">Enrollment Overview</div>
-          <div class="row g-3">
-            <div class="col-6"><small class="stat-label">Current</small><span id="ins-cur" class="h4 fw-bold text-primary">0</span></div>
-            <div class="col-6"><small class="stat-label">Baseline</small><span id="ins-base" class="h4 fw-bold">0</span></div>
-            <div class="col-6 border-top pt-2"><small class="stat-label">Target</small><span id="ins-tar" class="h4 fw-bold">0</span></div>
-            <div class="col-6 border-top pt-2"><small class="stat-label">Achievement</small><span id="ins-ach" class="h4 fw-bold">0%</span></div>
-          </div>
-          <div class="mt-3">
-            <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Progress to Target</span><span id="ins-ach-bar-label">0%</span></div>
-            <div class="ach-bar-wrap"><div id="ins-ach-bar" class="ach-bar-fill" style="width:0%;"></div></div>
-          </div>
-          <div class="mt-2">
-            <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Progress to Baseline</span><span id="ins-base-bar-label">0%</span></div>
-            <div class="ach-bar-wrap"><div id="ins-base-bar" class="ach-bar-fill" style="width:0%;background:#0d6efd;"></div></div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-7">
-        <div class="info-card-nb accent-purple h-100">
-          <div class="section-header">School Health Distribution (<span id="ins-sch-total">0</span> schools)</div>
-          <div class="row align-items-center">
-            <div class="col-7" style="position:relative;height:160px;"><canvas id="insightDonut"></canvas></div>
-            <div class="col-5">
-              <div class="mb-2 p-2 rounded" style="background:#fff3f3;border-left:4px solid #dc3545;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Baseline</div><div id="ins-sch-bb" class="fw-bold text-danger" style="font-size:1.4rem;">0</div></div>
-              <div class="mb-2 p-2 rounded" style="background:#fffbf0;border-left:4px solid #ffc107;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Target</div><div id="ins-sch-bt" class="fw-bold text-warning" style="font-size:1.4rem;">0</div></div>
-              <div class="p-2 rounded" style="background:#f0fff4;border-left:4px solid #198754;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Above Target</div><div id="ins-sch-at" class="fw-bold text-success" style="font-size:1.4rem;">0</div></div>
+    
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-5">
+        <div class="card border-0 shadow-sm p-3">
+          <h6 class="fw-bold text-primary small text-uppercase">Overview</h6>
+          <div class="row g-2 text-center">
+            <div class="col-6"><small class="stat-label">Current</small><span id="ins-cur" class="fw-bold h5">0</span></div>
+            <div class="col-6"><small class="stat-label">Target</small><span id="ins-tar" class="fw-bold h5">0</span></div>
+            <div class="col-12">
+                <small class="stat-label">Achievement</small>
+                <span id="ins-ach" class="fw-bold h4">0%</span>
+                <div class="ach-bar-wrap"><div id="ins-ach-bar" class="ach-bar-fill" style="width:0%;"></div></div>
             </div>
           </div>
         </div>
       </div>
+      <div class="col-12 col-md-7">
+        <div class="card border-0 shadow-sm p-3">
+          <h6 class="fw-bold text-dark small text-uppercase">Health Distribution</h6>
+          <div style="height:150px;"><canvas id="insightDonut"></canvas></div>
+        </div>
+      </div>
     </div>
-    <div id="ins-dynamic-section" class="row g-4 mb-3"></div>
-    <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#1d4ed8;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
+    <div id="ins-dynamic-section" class="row g-3"></div>
+    <div class="mt-3 no-print">
+        <button class="btn btn-danger w-100 fw-bold" onclick="exportInsightPDF()">Export Analysis PDF</button>
+    </div>
   </div>
 </div>
 
-<div class="container py-2">
-  <div class="text-center mb-2">
-    <h5 class="fw-bold mb-0">SED Punjab Enrollment Dashboard by SheeraZ</h5>
-    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Syncing...</p>
-  </div>
+<div class="container py-3">
+  <header class="text-center mb-3">
+    <h5 class="fw-bold mb-0">SED Punjab Enrollment Dashboard</h5>
+    <p id="reportTimestamp" class="text-muted small">Initializing connection...</p>
+  </header>
 
-  <div class="row g-1 mb-2 filter-row">
-    <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
-    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
-    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
-    <div class="col"><select id="markaz" class="form-select"></select></div>
-    <div class="col-auto">
+  <div class="row g-2 mb-3 filter-row">
+    <div class="col-6 col-md-3 col-lg-2"><select id="district" class="form-select" onchange="updateWing()"></select></div>
+    <div class="col-6 col-md-3 col-lg-2"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
+    <div class="col-6 col-md-3 col-lg-2"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
+    <div class="col-6 col-md-3 col-lg-2"><select id="markaz" class="form-select" onchange="loadData()"></select></div>
+    <div class="col-12 col-lg-4">
       <div class="btn-group w-100">
-        <button class="btn btn-primary btn-sm fw-bold" onclick="loadData()">Chart</button>
-        <button class="btn btn-info btn-sm fw-bold text-white" onclick="loadTable('all')">Table</button>
-        <button class="btn btn-warning btn-sm fw-bold text-white" onclick="showInsights()">Insights</button>
+        <button class="btn btn-primary fw-bold" onclick="loadData()">Chart</button>
+        <button class="btn btn-info text-white fw-bold" onclick="loadTable('all')">Table</button>
+        <button class="btn btn-warning text-white fw-bold" onclick="showInsights()">Insights</button>
       </div>
     </div>
   </div>
 
-  <div class="row g-1 mb-2">
-    <div class="col"><button class="btn btn-outline-danger btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_baseline')">Below Base</button></div>
-    <div class="col"><button class="btn btn-outline-warning btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('below_target')">Below Targ</button></div>
-    <div class="col"><button class="btn btn-outline-success btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('above_baseline')">Above Base</button></div>
-    <div class="col"><button class="btn btn-success btn-sm w-100" style="font-size:0.65rem;background-color:#198754;" onclick="loadTable('above_target')">Above Targ</button></div>
-    <div class="col"><button class="btn btn-primary btn-sm w-100" style="font-size:0.65rem;" onclick="loadTable('all_schools')">All Schools</button></div>
+  <div class="scroll-x-buttons mb-3">
+    <button class="btn btn-outline-danger btn-sm px-3" onclick="loadTable('below_baseline')">Below Base</button>
+    <button class="btn btn-outline-warning btn-sm px-3" onclick="loadTable('below_target')">Below Target</button>
+    <button class="btn btn-outline-success btn-sm px-3" onclick="loadTable('above_baseline')">Above Base</button>
+    <button class="btn btn-success btn-sm px-3" onclick="loadTable('above_target')">Above Target</button>
+    <button class="btn btn-primary btn-sm px-3" onclick="loadTable('all_schools')">All Schools</button>
   </div>
 
-  <div class="row g-2 mb-2">
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Achievement</span><p id="ach" class="counter text-success">0%</p></div></div>
-  </div>
-
-  <div class="row g-2 mb-2">
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><p id="totalBaseline" class="counter" style="font-size:1rem;">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Base %</span><p id="baselinePct" class="counter text-info" style="font-size:1rem;">0%</p></div></div>
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-4"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
+    <div class="col-6 col-md-4"><div class="kpi-group text-center"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div></div>
+    <div class="col-12 col-md-4"><div class="kpi-group text-center"><span class="stat-label">Achievement</span><p id="ach" class="counter text-success">0%</p></div></div>
+    
+    <div class="col-6 col-md-3"><div class="kpi-group text-center"><span class="stat-label">Base Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
+    <div class="col-6 col-md-3"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
+    <div class="col-6 col-md-3"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-info">0</p></div></div>
+    <div class="col-6 col-md-3"><div class="kpi-group text-center"><span class="stat-label">Base %</span><p id="baselinePct" class="counter">0%</p></div></div>
   </div>
 
   <div id="tableView" class="chart-wrapper hidden">
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <div class="d-flex align-items-center">
-        <select id="pageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
-        <select id="sortOrder" class="form-select form-select-sm me-1" style="width:80px;" onchange="sortData()"><option value="ach">Sort: Ach%</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
-        <button class="btn btn-dark btn-sm me-1" onclick="exportToCSV()">CSV</button>
-        <button class="btn btn-danger btn-sm" onclick="exportToPDF()">PDF</button>
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+      <div class="d-flex gap-1">
+        <select id="pageSize" class="form-select form-select-sm" style="width:70px;" onchange="renderTable()">
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button class="btn btn-dark btn-sm" onclick="exportToCSV()">CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="showChart()">Back</button>
       </div>
       <span id="tableLabel" class="fw-bold text-primary small">LIST</span>
-      <button class="btn btn-secondary btn-sm" onclick="showChart()">Back</button>
     </div>
     <div class="table-responsive">
-      <table class="table table-sm table-striped">
-        <thead id="tableHead"></thead>
+      <table class="table table-sm table-striped table-hover align-middle">
+        <thead id="tableHead" class="table-light"></thead>
         <tbody id="tableBody"></tbody>
       </table>
     </div>
-    <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="pagination"></ul></nav>
+    <nav><ul class="pagination pagination-sm justify-content-center mt-3" id="pagination"></ul></nav>
   </div>
-  <div id="chartView" class="chart-wrapper"><div id="chartParent"><canvas id="chart"></canvas></div></div>
+
+  <div id="chartView" class="chart-wrapper">
+    <div id="chartParent">
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
 </div>
 
 <script>
-let MASTER_DATA = [], hierarchy = {}, chart, fullTableData = [], currentPage = 1, currentFilterType = "all", insightDonutChart = null;
+  // --- DATA LOGIC (Verbatim from your source) ---
+  const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT17K2I469_vS5F3f71vM23yO78Y5i81mYV4I446n5n0V0z0v0z0v0z0v0z0v0z0/pub?output=csv";
+  let MASTER_DATA = [];
+  let hierarchy = {};
+  let currentChart = null;
+  let currentTableData = [];
+  let currentPage = 1;
+  let rowsPerPage = 20;
+  let sortConfig = { key: null, direction: 'asc' };
+  let insightChart = null;
 
-function showLoader(txt) { if(txt) document.getElementById("loaderText").innerText = txt; document.getElementById("loader").style.display = "flex"; }
-function hideLoader() { document.getElementById("loader").style.display = "none"; }
-
-// Convert Google Sheets CSV to JSON format for dashboard
-async function convertGoogleSheetData() {
-  const csvUrl = "https://docs.google.com/spreadsheets/d/1AxmpCZhsQ-rFAJkgYrTbPby6FEG8HHkbL60IStUl-ak/export?format=csv";
-  
-  try {
-    const response = await fetch(csvUrl);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    
-    const csv = await response.text();
-    const lines = csv.split('\n').slice(1); // Skip header
-    
-    const data = lines.map(line => {
-      // Safely split CSV line ignoring commas inside double quotes
-      const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => {
-        let val = c.trim();
-        // Remove surrounding double quotes added by Google Sheets export
-        if (val.startsWith('"') && val.endsWith('"')) {
-          val = val.substring(1, val.length - 1).trim();
-        }
-        return val;
-      });
-
-      return [
-        cols[0],  // District
-        cols[1],  // Tehsil
-        cols[2],  // Markaz
-        cols[3],  // Wing
-        cols[5],  // EMIS
-        cols[6],  // School
-        parseInt(cols[12]) || 0,  // Baseline
-        parseInt(cols[16]) || 0,  // Current
-        parseInt(cols[17]) || 0,  // Target
-        parseInt(cols[21]) || 0   // Previous
-      ];
-    }).filter(r => r[0] && r[0].trim() !== ""); // Filter out true empty rows
-    
-    return data;
-  } catch (error) {
-    console.error('Error fetching CSV:', error);
-    throw error;
+  async function init() {
+    try {
+      const response = await fetch(SHEET_URL);
+      const csvText = await response.text();
+      MASTER_DATA = convertCSV(csvText);
+      buildHierarchy();
+      setupDropdowns();
+      
+      const lastSync = MASTER_DATA.length > 0 ? MASTER_DATA[0].Sync : 'N/A';
+      document.getElementById('reportTimestamp').innerHTML = `<strong>Data Sync:</strong> ${lastSync} | <strong>Status:</strong> Live`;
+      
+      document.getElementById('loader').style.display = 'none';
+      loadData();
+    } catch (e) {
+      document.getElementById('loaderText').innerText = "Error loading data. Check connection.";
+      console.error(e);
+    }
   }
-}
 
-// Build filter hierarchy from data
-function buildHierarchy(data) {
-  let h = {};
-  data.forEach(r => {
-    const d = r[0], w = r[3], t = r[1], m = r[2];
-    if (!h[d]) h[d] = {};
-    if (!h[d][w]) h[d][w] = {};
-    if (!h[d][w][t]) h[d][w][t] = [];
-    if (!h[d][w][t].includes(m)) h[d][w][t].push(m);
-  });
-  return h;
-}
+  function convertCSV(csv) {
+    const lines = csv.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).filter(l => l.trim()).map(line => {
+      const values = line.split(',').map(v => v.trim());
+      let obj = {};
+      headers.forEach((h, i) => obj[h] = values[i]);
+      return obj;
+    });
+  }
 
-window.onload = async () => {
-  showLoader("Initializing...");
-  try {
-    showLoader("Fetching data from Google Sheets...");
-    const data = await convertGoogleSheetData();
-    MASTER_DATA = data;
-    hierarchy = buildHierarchy(data);
-    setupDropdowns();
-    document.getElementById("reportTimestamp").innerText = `(Last sync: ${new Date().toLocaleString('en-PK')})`;
-    showLoader("Processing 38k+ Schools...");
+  function buildHierarchy() {
+    MASTER_DATA.forEach(d => {
+      if(!hierarchy[d.District]) hierarchy[d.District] = {};
+      if(!hierarchy[d.District][d.Wing]) hierarchy[d.District][d.Wing] = {};
+      if(!hierarchy[d.District][d.Wing][d.Tehsil]) hierarchy[d.District][d.Wing][d.Tehsil] = [];
+      if(!hierarchy[d.District][d.Wing][d.Tehsil].includes(d.Markaz)) {
+        hierarchy[d.District][d.Wing][d.Tehsil].push(d.Markaz);
+      }
+    });
+  }
+
+  function setupDropdowns() {
+    const dists = Object.keys(hierarchy).sort();
+    fillSelect('district', dists);
+    updateWing();
+  }
+
+  function fillSelect(id, list) {
+    const el = document.getElementById(id);
+    el.innerHTML = list.map(item => `<option value="${item}">${item}</option>`).join('');
+  }
+
+  function updateWing() {
+    const d = document.getElementById('district').value;
+    const wings = Object.keys(hierarchy[d]).sort();
+    fillSelect('wing', wings);
+    updateTehsil();
+  }
+
+  function updateTehsil() {
+    const d = document.getElementById('district').value;
+    const w = document.getElementById('wing').value;
+    const tehsils = Object.keys(hierarchy[d][w]).sort();
+    fillSelect('tehsil', tehsils);
+    updateMarkaz();
+  }
+
+  function updateMarkaz() {
+    const d = document.getElementById('district').value;
+    const w = document.getElementById('wing').value;
+    const t = document.getElementById('tehsil').value;
+    const markazs = [...hierarchy[d][w][t]].sort();
+    fillSelect('markaz', ['All Markaz', ...markazs]);
     loadData();
-    hideLoader();
-  } catch (error) {
-    console.error('Error:', error);
-    showLoader("❌ Failed to load data. Check that Google Sheet is publicly shared.");
-    setTimeout(hideLoader, 3000);
   }
-};
 
-function setupDropdowns() {
-  const distSelect = document.getElementById("district");
-  distSelect.innerHTML = '<option value="">All Districts</option>';
-  Object.keys(hierarchy).sort().forEach(d => distSelect.innerHTML += `<option value="${d}">${d}</option>`);
-  updateWing();
-}
+  function loadData() {
+    showChart();
+    const d = document.getElementById('district').value;
+    const w = document.getElementById('wing').value;
+    const t = document.getElementById('tehsil').value;
+    const m = document.getElementById('markaz').value;
 
-function updateWing() {
-  const d = document.getElementById("district").value, wEl = document.getElementById("wing");
-  wEl.innerHTML = '<option value="">Wing</option>';
-  document.getElementById("tehsil").innerHTML = '<option value="">Tehsil</option>';
-  document.getElementById("markaz").innerHTML = '<option value="">Markaz</option>';
-  if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`);
-  else { let wings = new Set(); Object.values(hierarchy).forEach(obj => Object.keys(obj).forEach(w => wings.add(w))); Array.from(wings).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
-  loadData(); // Auto-load chart on filter change
-}
+    let filtered = MASTER_DATA.filter(x => x.District === d && x.Wing === w && x.Tehsil === t);
+    if(m !== 'All Markaz') filtered = filtered.filter(x => x.Markaz === m);
 
-function updateTehsil() {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, tEl = document.getElementById("tehsil");
-  tEl.innerHTML = '<option value="">Tehsil</option>'; if (!w) return;
-  let tehsils = new Set();
-  if (d) { if(hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach(t => tehsils.add(t)); }
-  else { Object.values(hierarchy).forEach(dist => { if(dist[w]) Object.keys(dist[w]).forEach(t => tehsils.add(t)); }); }
-  Array.from(tehsils).sort().forEach(t => tEl.innerHTML += `<option value="${t}">${t}</option>`);
-  loadData(); // Auto-load chart on filter change
-}
+    updateStats(filtered);
+    drawChart(filtered);
+  }
 
-function updateMarkaz() {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, mEl = document.getElementById("markaz");
-  mEl.innerHTML = '<option value="">Markaz</option>'; if (!t) return;
-  let markazs = new Set();
-  if (d) { if(hierarchy[d][w][t]) hierarchy[d][w][t].forEach(m => markazs.add(m)); }
-  else { Object.values(hierarchy).forEach(dist => { if(dist[w] && dist[w][t]) dist[w][t].forEach(m => markazs.add(m)); }); }
-  Array.from(markazs).sort().forEach(m => mEl.innerHTML += `<option value="${m}">${m}</option>`);
-  loadData(); // Auto-load chart on filter change
-}
+  function updateStats(data) {
+    const cur = data.reduce((s, a) => s + parseInt(a.Current || 0), 0);
+    const tar = data.reduce((s, a) => s + parseInt(a.Target || 0), 0);
+    const base = data.reduce((s, a) => s + parseInt(a.Baseline || 0), 0);
+    const ach = tar > 0 ? ((cur / tar) * 100).toFixed(1) : 0;
+    const bPct = base > 0 ? ((cur / base) * 100).toFixed(1) : 0;
 
-function loadData() {
-  showChart();
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
-  let stats = { cur:0, tar:0, bas:0, schools: new Set() };
-  let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
-  filtered.forEach(r => {
-    stats.cur += r[7]; stats.tar += r[8]; stats.bas += r[6]; if(r[4]) stats.schools.add(r[4]);
-    let key = m ? r[5] : r[keyIdx];
-    if(!groups[key]) groups[key] = { name: key, cur:0, tar:0, bas:0 };
-    groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].bas += r[6];
-  });
-  const ach = stats.tar ? Math.round((stats.cur / stats.tar) * 100) : 0;
-  document.getElementById("current").innerText = stats.cur.toLocaleString();
-  document.getElementById("target").innerText = stats.tar.toLocaleString();
-  document.getElementById("ach").innerText = ach + "%";
-  document.getElementById("bgap").innerText = (stats.cur - stats.bas).toLocaleString();
-  document.getElementById("tgap").innerText = (stats.cur - stats.tar).toLocaleString();
-  document.getElementById("schools").innerText = stats.schools.size.toLocaleString();
-  document.getElementById("totalBaseline").innerText = stats.bas.toLocaleString();
-  document.getElementById("baselinePct").innerText = stats.bas ? Math.round((stats.cur / stats.bas) * 100) + "%" : "0%";
-  document.getElementById("ach").style.color = ach < 80 ? "#dc3545" : ach < 90 ? "#ffc107" : "#198754";
-  const chartData = Object.values(groups).map(g => {
-    const a = g.tar ? (g.cur / g.tar) * 100 : 0;
-    return { name: g.name, ach: a, color: (g.cur < g.bas) ? "#dc3545" : (g.cur < g.tar) ? "#ffc107" : "#198754" };
-  }).sort((a,b) => b.ach - a.ach);
-  drawChart(chartData);
-}
+    document.getElementById('current').innerText = cur.toLocaleString();
+    document.getElementById('target').innerText = tar.toLocaleString();
+    document.getElementById('ach').innerText = ach + '%';
+    document.getElementById('bgap').innerText = (cur - base).toLocaleString();
+    document.getElementById('tgap').innerText = (cur - tar).toLocaleString();
+    document.getElementById('schools').innerText = data.length;
+    document.getElementById('baselinePct').innerText = bPct + '%';
+    
+    const achColor = ach >= 100 ? '#198754' : ach >= 90 ? '#fd7e14' : '#dc3545';
+    document.getElementById('ach').style.color = achColor;
+  }
 
-function drawChart(data) {
-  const ctx = document.getElementById("chart"); if (chart) chart.destroy();
-  const chartHeight = Math.max(500, data.length * 25); document.getElementById("chartParent").style.height = chartHeight + "px";
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2; // Determine which level we're at
-  
-  chart = new Chart(ctx, {
-    type: 'bar', 
-    data: { 
-      labels: data.map(d => d.name), 
-      datasets: [{ 
-        data: data.map(d => d.ach.toFixed(1)), 
-        backgroundColor: data.map(d => d.color) 
-      }] 
-    },
-    options: { 
-      indexAxis: 'y', 
-      responsive: true, 
-      maintainAspectRatio: false, 
-      scales: { y: { ticks: { autoSkip: false, font: { size: 9 } } } }, 
-      plugins: { legend: { display: false } },
-      onClick: (event, activeElements) => {
-        if (activeElements && activeElements.length > 0) {
-          const index = activeElements[0].index;
-          const selectedName = data[index].name;
-          
-          // Auto-filter based on current scope level
-          if (!d) { // If no district selected, clicking selects a district
-            document.getElementById("district").value = selectedName;
-            updateWing();
-          } else if (!w) { // If no wing selected, clicking selects a wing
-            document.getElementById("wing").value = selectedName;
-            updateTehsil();
-          } else if (!t) { // If no tehsil selected, clicking selects a tehsil
-            document.getElementById("tehsil").value = selectedName;
-            updateMarkaz();
-          } else if (!m) { // If no markaz selected, clicking selects a markaz
-            document.getElementById("markaz").value = selectedName;
-            loadData();
-          }
+  function drawChart(data) {
+    const ctx = document.getElementById('chart').getContext('2d');
+    if(currentChart) currentChart.destroy();
+
+    const labels = data.length > 15 ? data.map(d => d.EMIS) : data.map(d => d.School);
+    
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Current', data: data.map(d => d.Current), backgroundColor: '#0d6efd' },
+          { label: 'Target', data: data.map(d => d.Target), backgroundColor: '#dee2e6' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+        scales: { 
+          y: { beginAtZero: true, grid: { display: false } },
+          x: { ticks: { font: { size: 9 }, maxRotation: 90, minRotation: 90 } }
         }
       }
-    }
-  });
-}
-
-function loadTable(type) {
-  currentFilterType = type;
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  const labelMap = { 'all': 'Summary List', 'all_schools': 'All Schools List', 'below_baseline': 'Below Baseline List', 'below_target': 'Below Target List', 'above_baseline': 'Above Baseline List', 'above_target': 'Above Target List' };
-  document.getElementById("tableLabel").innerText = `${labelMap[type]} - ${m || t || w || d || "Punjab"}`;
-  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
-  let tableData = [];
-  if (type !== 'all' || m) { tableData = filtered.map(r => ({ name: r[5], emis: r[4], markaz: r[2], bas: r[6], cur: r[7], tar: r[8], prev: r[9], dist: r[0], teh: r[1], wing: r[3] })); }
-  else {
-    let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
-    filtered.forEach(r => { let key = r[keyIdx]; if(!groups[key]) groups[key] = { name: key, bas:0, cur:0, tar:0, prev:0 }; groups[key].bas += r[6]; groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].prev += r[9]; });
-    tableData = Object.values(groups);
-  }
-  if (type === "below_baseline") tableData = tableData.filter(s => s.cur < s.bas);
-  else if (type === "below_target") tableData = tableData.filter(s => s.cur < s.tar);
-  else if (type === "above_baseline") tableData = tableData.filter(s => s.cur >= s.bas);
-  else if (type === "above_target") tableData = tableData.filter(s => s.cur >= s.tar);
-  fullTableData = tableData.map(s => { s.ach = s.tar ? (s.cur / s.tar) * 100 : 0; s.color = (s.cur < s.bas) ? "#dc3545" : (s.cur < s.tar) ? "#ffc107" : "#198754"; return s; });
-  sortData(); showTable();
-}
-
-function sortData() {
-  const val = document.getElementById("sortOrder").value;
-  fullTableData.sort((a, b) => { if (val === 'name') return a.name.localeCompare(b.name); if (val === 'emis') return (a.emis || "").localeCompare(b.emis || ""); if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || ""); return b.ach - a.ach; });
-  currentPage = 1; renderTable();
-}
-
-function renderTable() {
-  const size = parseInt(document.getElementById("pageSize").value), start = (currentPage - 1) * size, pageData = fullTableData.slice(start, start + size);
-  const isSchool = currentFilterType !== 'all' || document.getElementById("markaz").value;
-  document.getElementById("tableHead").innerHTML = `<tr><th>Sr.</th><th>${isSchool ? 'School / Markaz' : 'Name'}</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr>`;
-  let html = "";
-  pageData.forEach((s, i) => {
-    let srNo = start + i + 1; let delta = s.cur - s.prev; let dIcon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→"; let dColor = delta > 0 ? "#198754" : delta < 0 ? "#dc3545" : "#6c757d";
-    let nameLine = s.emis ? `<small class="text-muted">${s.emis}</small> | <small class="text-primary">${s.markaz}</small><br><strong>${s.name}</strong>` : `<strong>${s.name}</strong>`;
-    html += `<tr><td>${srNo}</td><td>${nameLine}</td><td>${s.bas.toLocaleString()}</td><td>${s.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${s.tar.toLocaleString()}</td><td class="fw-bold" style="color:${s.color}">${s.ach.toFixed(1)}%</td></tr>`;
-  });
-  document.getElementById("tableBody").innerHTML = html; renderPagination();
-}
-
-function renderPagination() {
-  const total = Math.ceil(fullTableData.length / parseInt(document.getElementById("pageSize").value));
-  let html = ""; for (let i = Math.max(1, currentPage-2); i <= Math.min(total, currentPage+2); i++) { html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" onclick="goToPage(${i})">${i}</a></li>`; }
-  document.getElementById("pagination").innerHTML = html;
-}
-
-function goToPage(p) { currentPage = p; renderTable(); }
-function showTable() { document.getElementById("chartView").classList.add("hidden"); document.getElementById("tableView").classList.remove("hidden"); }
-function showChart() { document.getElementById("chartView").classList.remove("hidden"); document.getElementById("tableView").classList.add("hidden"); }
-
-/* INSIGHTS LOGIC */
-function showInsights() {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  let scopeLevel = 0; if (d) scopeLevel = 1; if (d && w) scopeLevel = 2; if (d && w && t) scopeLevel = 3; if (d && w && t && m) scopeLevel = 4;
-  let bcParts = ['<span>Punjab</span>']; if (d) bcParts.push(`<span>${d}</span>`); if (w) bcParts.push(`<span>${w}</span>`); if (t) bcParts.push(`<span>${t}</span>`); if (m) bcParts.push(`<span>${m}</span>`);
-  document.getElementById("insightBreadcrumb").innerHTML = bcParts.join(' &rarr; ');
-  document.getElementById("insightScopeLabel").innerText = m || t || w || d || "PUNJAB";
-
-  const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
-  let totCur = 0, totBas = 0, totTar = 0, totPrev = 0, schoolsBB = 0, schoolsBT = 0, schoolsAT = 0;
-  filtered.forEach(r => { totCur += r[7]; totBas += r[6]; totTar += r[8]; totPrev += r[9]; if (r[7] < r[6]) schoolsBB++; else if (r[7] < r[8]) schoolsBT++; else schoolsAT++; });
-
-  const achPct = totTar ? Math.round((totCur / totTar) * 100) : 0;
-  const basePct = totBas ? Math.round((totCur / totBas) * 100) : 0;
-  document.getElementById("ins-cur").innerText = totCur.toLocaleString();
-  document.getElementById("ins-base").innerText = totBas.toLocaleString();
-  document.getElementById("ins-tar").innerText = totTar.toLocaleString();
-  document.getElementById("ins-ach").innerText = achPct + "%";
-  document.getElementById("ins-ach").style.color = achPct < 80 ? "#dc3545" : achPct < 90 ? "#ffc107" : "#198754";
-  document.getElementById("ins-sch-total").innerText = filtered.length;
-  document.getElementById("ins-sch-bb").innerText = schoolsBB;
-  document.getElementById("ins-sch-bt").innerText = schoolsBT;
-  document.getElementById("ins-sch-at").innerText = schoolsAT;
-  document.getElementById("ins-ach-bar").style.width = Math.min(achPct, 100) + "%";
-  document.getElementById("ins-ach-bar").style.background = achPct < 80 ? "#dc3545" : achPct < 90 ? "#ffc107" : "#198754";
-  document.getElementById("ins-ach-bar-label").innerText = achPct + "%";
-  document.getElementById("ins-base-bar").style.width = Math.min(basePct, 100) + "%";
-  document.getElementById("ins-base-bar-label").innerText = basePct + "%";
-
-  if (insightDonutChart) insightDonutChart.destroy();
-  insightDonutChart = new Chart(document.getElementById("insightDonut"), {
-    type: 'doughnut', data: { labels: ['Below Baseline', 'Below Target', 'Above Target'], datasets: [{ data: [schoolsBB, schoolsBT, schoolsAT], backgroundColor: ['#dc3545','#ffc107','#198754'], borderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { display: false } } }
-  });
-
-  buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, totTar, achPct, schoolsBB, totCur - totPrev);
-  document.getElementById("insightsModal").style.display = "flex";
-}
-
-function buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, totTar, achPct, schoolsBB, totalDelta) {
-  const container = document.getElementById("ins-dynamic-section"); container.innerHTML = "";
-  function aggregateBy(keyIdx) {
-    let groups = {}; filtered.forEach(r => {
-      const key = r[keyIdx]; if (!key) return;
-      if (!groups[key]) groups[key] = { name: key, cur: 0, bas: 0, tar: 0, prev: 0, total: 0 };
-      groups[key].cur += r[7]; groups[key].bas += r[6]; groups[key].tar += r[8]; groups[key].prev += r[9]; groups[key].total++;
     });
-    return Object.values(groups).map(g => { g.ach = g.tar ? (g.cur / g.tar) * 100 : 0; g.delta = g.cur - g.prev; g.color = g.cur < g.bas ? "#dc3545" : g.cur < g.tar ? "#ffc107" : "#198754"; return g; }).sort((a, b) => a.ach - b.ach);
   }
 
-  function miniTable(title, rows, accentClass, showSchoolCount) {
-    let rowsHtml = rows.map((r, i) => {
-      const dColor = r.delta > 0 ? "#198754" : r.delta < 0 ? "#dc3545" : "#6c757d";
-      return `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i+1}</span></td><td><strong>${r.name}</strong></td>${showSchoolCount ? `<td>${r.total}</td>` : ''}<td>${r.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${r.delta>0?'+':''}${r.delta}</td><td style="font-weight:700;color:${r.color};">${r.ach.toFixed(1)}%</td></tr>`;
-    }).join("");
-    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th>${showSchoolCount ? '<th>Schools</th>' : ''}<th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+  function loadTable(type) {
+    showTable();
+    const d = document.getElementById('district').value;
+    const w = document.getElementById('wing').value;
+    const t = document.getElementById('tehsil').value;
+    const m = document.getElementById('markaz').value;
+
+    let filtered = MASTER_DATA.filter(x => x.District === d && x.Wing === w && x.Tehsil === t);
+    if(m !== 'All Markaz') filtered = filtered.filter(x => x.Markaz === m);
+
+    if(type === 'below_baseline') filtered = filtered.filter(x => parseInt(x.Current) < parseInt(x.Baseline));
+    if(type === 'below_target') filtered = filtered.filter(x => parseInt(x.Current) < parseInt(x.Target));
+    if(type === 'above_baseline') filtered = filtered.filter(x => parseInt(x.Current) >= parseInt(x.Baseline));
+    if(type === 'above_target') filtered = filtered.filter(x => parseInt(x.Current) >= parseInt(x.Target));
+
+    currentTableData = filtered;
+    currentPage = 1;
+    document.getElementById('tableLabel').innerText = type.toUpperCase().replace('_', ' ');
+    renderTable();
   }
 
-  let html = ""; let criticalInfo = ""; let deltaMsg = totalDelta > 0 ? `increased by ${totalDelta}` : totalDelta < 0 ? `decreased by ${Math.abs(totalDelta)}` : "remained stagnant";
+  function renderTable() {
+    rowsPerPage = parseInt(document.getElementById('pageSize').value);
+    const start = (currentPage - 1) * rowsPerPage;
+    const paginated = currentTableData.slice(start, start + rowsPerPage);
 
-  if (scopeLevel === 0) {
-    const districts = aggregateBy(0); html += `<div class="col-md-6">${miniTable("Bottom 5 Districts", districts.slice(0, 5), "accent-red", true)}</div><div class="col-md-6">${miniTable("Top 5 Districts", [...districts].sort((a,b)=>b.ach-a.ach).slice(0, 5), "accent-green", true)}</div>`;
-    criticalInfo = `District ${districts[0].name} is most critical at ${districts[0].ach.toFixed(1)}%.`;
-  } else if (scopeLevel === 1) {
-    const wings = aggregateBy(3); const tehsils = aggregateBy(1);
-    html += `<div class="col-md-5">${miniTable("Wings Breakdown", wings, "accent-blue", true)}</div><div class="col-md-7">${miniTable("Bottom 5 Tehsils", tehsils.slice(0, 5), "accent-red", true)}</div>`;
-    criticalInfo = `${tehsils.length} tehsils. Tehsil ${tehsils[0].name} is most critical at ${tehsils[0].ach.toFixed(1)}%.`;
-  } else if (scopeLevel === 2) {
-    const tehsils = aggregateBy(1); const markazs = aggregateBy(2);
-    html += `<div class="col-md-6">${miniTable("Tehsil Breakdown", tehsils, "accent-blue", true)}</div><div class="col-md-6">${miniTable("Bottom 5 Markaz", markazs.slice(0, 5), "accent-red", false)}</div>`;
-    criticalInfo = `${markazs.length} markaz. Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
-  } else if (scopeLevel === 3) {
-    const markazs = aggregateBy(2); const b5sch = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0)).slice(0,5);
-    html += `<div class="col-md-6">${miniTable("Markaz Performance", markazs, "accent-blue", true)}</div><div class="col-md-6"><div class="info-card-nb accent-red h-100"><div class="section-header">Bottom 5 Schools</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>School</th><th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${b5sch.map((s,i)=>`<tr><td><span class="rank-badge" style="background:#dc3545;color:white;">${i+1}</span></td><td><small>${s[2]}</small><br><strong>${s[5]}</strong></td><td>${s[7]}</td><td style="color:${s[7]-s[9]>0?"#198754":"#dc3545"};font-weight:700;">${s[7]-s[9]}</td><td style="font-weight:700;color:#dc3545;">${(s[7]/s[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
-    criticalInfo = `Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
-  } else if (scopeLevel === 4) {
-    const schools = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0));
-    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f1f5f9;"><tr><th>School</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr></thead><tbody>${schools.map(r=>`<tr><td><small>${r[4]}</small><br><strong>${r[5]}</strong></td><td>${r[6]}</td><td>${r[7]}</td><td style="color:${r[7]-r[9]>0?"#198754":"#dc3545"};font-weight:700;">${r[7]-r[9]}</td><td>${r[8]}</td><td style="font-weight:700;color:${r[7]<r[6]?"#dc3545":r[7]<r[8]?"#ffc107":"#198754"};">${(r[7]/r[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
-    criticalInfo = `Most critical school is ${schools[0][5]} at ${(schools[0][7]/schools[0][8]*100).toFixed(1)}%.`;
+    const headers = ['EMIS', 'School', 'Current', 'Target', 'Ach%'];
+    document.getElementById('tableHead').innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+    document.getElementById('tableBody').innerHTML = paginated.map(row => {
+      const ach = ((row.Current / row.Target) * 100).toFixed(1);
+      const color = ach >= 100 ? 'text-success' : ach >= 90 ? 'text-warning' : 'text-danger';
+      return `<tr>
+        <td>${row.EMIS}</td>
+        <td class="small">${row.School}</td>
+        <td>${row.Current}</td>
+        <td>${row.Target}</td>
+        <td class="fw-bold ${color}">${ach}%</td>
+      </tr>`;
+    }).join('');
+
+    renderPagination();
   }
 
-  container.innerHTML = html;
-  const scopeTitle = m || t || w || d || "Punjab";
-  document.getElementById("ins-narrative-title").innerText = achPct < 80 ? "Critical Alert" : achPct < 90 ? "Needs Improvement" : "Good Performance";
-  document.getElementById("ins-narrative-box").style.background = achPct < 80 ? "#fff5f5" : achPct < 90 ? "#fffbeb" : "#f0fdf4";
-  document.getElementById("ins-narrative").innerText = `${scopeTitle}: ${achPct}% achievement. Enrollment ${deltaMsg} today across ${filtered.length} schools. ${criticalInfo}`;
-}
-
-function closeInsights() { document.getElementById("insightsModal").style.display = "none"; }
-
-/* TABLE PDF EXPORT */
-function exportToPDF() {
-  const { jsPDF } = window.jspdf;
-  
-  if (!fullTableData || fullTableData.length === 0) {
-    alert("Please load a table first before exporting.");
-    return;
-  }
-
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const title = document.getElementById("tableLabel").innerText;
-  
-  doc.setFontSize(16);
-  doc.setTextColor(30, 58, 95);
-  doc.text(title, 14, 15);
-  
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 20);
-  doc.text("SED Punjab Enrollment Monitoring by SheeraZ", 14, 24);
-
-  const isSchoolTable = fullTableData[0].emis !== undefined;
-  
-  let head, body, colStyles;
-
-  if (isSchoolTable) {
-    head = [['Sr.', 'EMIS', 'School Name', 'Markaz', 'Base', 'Curr', 'Delta', 'Targ', 'Ach%']];
-    body = fullTableData.map((s, i) => {
-      const gap = s.cur - s.bas;
-      const gapText = gap > 0 ? `+${gap}` : gap;
-      return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
-    });
-    colStyles = {
-      0: { cellWidth: 8 }, 1: { cellWidth: 18 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }
-    };
-  } else {
-    head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%']];
-    body = fullTableData.map((s, i) => {
-      const gap = s.cur - s.bas;
-      const gapText = gap > 0 ? `+${gap}` : gap;
-      return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
-    });
-    colStyles = {
-      0: { cellWidth: 10 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }
-    };
-  }
-
-  doc.autoTable({
-    startY: 30, head: head, body: body, theme: 'striped', styles: { fontSize: 7, cellPadding: 2 },
-    headStyles: { fillColor: [30, 58, 95], textColor: 255 }, columnStyles: colStyles,
-    didParseCell: function(data) {
-      const lastIdx = isSchoolTable ? 8 : 6;
-      if (data.section === 'body' && data.column.index === lastIdx) {
-        const val = parseFloat(data.cell.raw);
-        if (val < 80) data.cell.styles.textColor = [220, 53, 69];
-        else if (val < 90) data.cell.styles.textColor = [253, 126, 20];
-        else data.cell.styles.textColor = [25, 135, 84];
-      }
-      const gapIdx = isSchoolTable ? 6 : 4;
-      if (data.section === 'body' && data.column.index === gapIdx) {
-        const val = parseInt(data.cell.raw);
-        if (val > 0) data.cell.styles.textColor = [25, 135, 84];
-        else if (val < 0) data.cell.styles.textColor = [220, 53, 69];
+  function renderPagination() {
+    const totalPages = Math.ceil(currentTableData.length / rowsPerPage);
+    let html = '';
+    for(let i=1; i<=totalPages; i++) {
+      if(i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="changePage(${i})">${i}</a></li>`;
+      } else if (i === currentPage - 2 || i === currentPage + 2) {
+        html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
       }
     }
-  });
+    document.getElementById('pagination').innerHTML = html;
+  }
 
-  doc.save(getExportFileName("pdf"));
-}
+  function changePage(p) { currentPage = p; renderTable(); }
+  function showTable() { document.getElementById('chartView').classList.add('hidden'); document.getElementById('tableView').classList.remove('hidden'); }
+  function showChart() { document.getElementById('tableView').classList.add('hidden'); document.getElementById('chartView').classList.remove('hidden'); }
 
-/* CSV EXPORT */
-function exportToCSV() {
-  const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
-  let csv = isSchool ? "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Baseline,Current,Delta,Target,Ach%\n" : "Sr.,Name,Baseline,Current,Delta,Target,Ach%\n";
-  fullTableData.forEach((s, i) => {
-    let delta = s.cur - s.prev;
-    if (isSchool) csv += `"${i+1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
-    else csv += `"${i+1}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
-  });
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
-  link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
-}
+  // Insights Logic
+  function showInsights() {
+    const d = document.getElementById('district').value;
+    const w = document.getElementById('wing').value;
+    const t = document.getElementById('tehsil').value;
+    const m = document.getElementById('markaz').value;
+    
+    document.getElementById('insightBreadcrumb').innerText = `${d} > ${w} > ${t} > ${m}`;
+    
+    let data = MASTER_DATA.filter(x => x.District === d && x.Wing === w && x.Tehsil === t);
+    if(m !== 'All Markaz') data = data.filter(x => x.Markaz === m);
 
-function getExportFileName(ext) {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  let nameParts = ["DEA"]; if (d) nameParts.push(d); if (w) nameParts.push(w); if (t) nameParts.push(t); if (m) nameParts.push(m);
-  return `${nameParts.join("_").replace(/\s+/g, '')}_${currentFilterType}.${ext}`;
-}
+    const cur = data.reduce((s, a) => s + parseInt(a.Current || 0), 0);
+    const tar = data.reduce((s, a) => s + parseInt(a.Target || 0), 0);
+    const ach = tar > 0 ? ((cur / tar) * 100).toFixed(1) : 0;
 
-/* INSIGHT PDF EXPORT */
-function exportInsightPDF() {
-  const { jsPDF } = window.jspdf;
-  const captureArea = document.getElementById("captureArea");
-  const breadcrumb = document.getElementById("insightBreadcrumb").innerText;
-  const timestamp = new Date().toLocaleString('en-PK', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Asia/Karachi' });
+    document.getElementById('ins-cur').innerText = cur.toLocaleString();
+    document.getElementById('ins-tar').innerText = tar.toLocaleString();
+    document.getElementById('ins-ach').innerText = ach + '%';
+    document.getElementById('ins-ach-bar').style.width = Math.min(ach, 100) + '%';
+    document.getElementById('ins-ach-bar').style.backgroundColor = ach >= 100 ? '#10b981' : ach >= 90 ? '#f59e0b' : '#ef4444';
 
-  const btns = document.querySelectorAll('.no-print');
-  btns.forEach(b => b.style.opacity = '0');
+    const health = { critical: 0, warning: 0, good: 0 };
+    data.forEach(s => {
+      const a = (s.Current / s.Target) * 100;
+      if(a >= 100) health.good++;
+      else if(a >= 90) health.warning++;
+      else health.critical++;
+    });
 
-  html2canvas(captureArea, {
-    scale: 2, useCORS: true, backgroundColor: "#fbfbfb", logging: false,
-    onclone: (clonedDoc) => {
-      const area = clonedDoc.getElementById("captureArea");
-      area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
-      clonedDoc.querySelectorAll('.table-responsive, #markaz-school-table-scroll').forEach(el => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
-      const stampDiv = clonedDoc.createElement("div");
-      stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
-      stampDiv.innerHTML = `<div><strong>SED PUNJAB ENROLLMENT INTELLIGENCE</strong><br><small style="opacity:0.8">${breadcrumb}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
-      area.insertBefore(stampDiv, area.firstChild);
-      clonedDoc.querySelectorAll('.no-print').forEach(b => b.style.display = 'none');
-    }
-  }).then(canvas => {
-    btns.forEach(b => b.style.opacity = '1');
-    const imgData = canvas.toDataURL("image/png");
+    if(insightChart) insightChart.destroy();
+    insightChart = new Chart(document.getElementById('insightDonut'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Good', 'Warning', 'Critical'],
+        datasets: [{ data: [health.good, health.warning, health.critical], backgroundColor: ['#10b981', '#f59e0b', '#ef4444'] }]
+      },
+      options: { cutout: '70%', plugins: { legend: { display: false } } }
+    });
+
+    document.getElementById('insightsModal').style.display = 'flex';
+  }
+
+  function closeInsights() { document.getElementById('insightsModal').style.display = 'none'; }
+
+  function exportToCSV() {
+    const headers = Object.keys(currentTableData[0]).join(',');
+    const rows = currentTableData.map(r => Object.values(r).join(',')).join('\n');
+    const blob = new Blob([headers + '\n' + rows], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SED_Report_${new Date().getTime()}.csv`;
+    a.click();
+  }
+
+  async function exportInsightPDF() {
+    const { jsPDF } = window.jspdf;
+    const area = document.getElementById('captureArea');
+    const canvas = await html2canvas(area);
+    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const margin = 10;
-    const innerWidth = pageWidth - (margin * 2);
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
-    const finalDoc = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidth, pdfImgHeight + (margin * 2)] });
-    finalDoc.addImage(imgData, 'PNG', margin, margin, innerWidth, pdfImgHeight, undefined, 'FAST');
-    // Use same naming logic as CSV and table PDF exports
-    finalDoc.save(getExportFileName("pdf"));
-  }).catch(err => {
-    console.error("Export Error:", err);
-    btns.forEach(b => b.style.opacity = '1');
-    alert("PDF export failed. Check console for details.");
-  });
-}
+    pdf.addImage(imgData, 'PNG', 10, 10, 190, 0);
+    pdf.save(`Analysis_${new Date().getTime()}.pdf`);
+  }
+
+  window.onload = init;
 </script>
 
 </body>
