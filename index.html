@@ -179,19 +179,26 @@
     <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
+  <!-- KPI Row 1: Current Enrollment | Baseline | Targeted Enrollment | New Target -->
   <div class="row g-2 mb-2">
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Current Enrollment</span><p id="current" class="counter text-primary">0</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><p id="totalBaseline" class="counter">0</p></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Targetted Enrollment</span><p id="target" class="counter text-dark">0</p></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">% Ach</span><p id="ach" class="counter text-success">0%</p></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">% NT Ach</span><p id="ntAchStat" class="counter text-info">0%</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">New Target</span><p id="ntTotal" class="counter text-info">0</p></div></div>
   </div>
 
+  <!-- KPI Row 2: Schools | Baseline Gap | Target Gap -->
   <div class="row g-2 mb-2">
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><p id="totalBaseline" class="counter" style="font-size:1rem;">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><p id="bgap" class="counter text-danger">0</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><p id="tgap" class="counter text-warning">0</p></div></div>
+  </div>
+
+  <!-- KPI Row 3: % Ach | Base % | % NT Ach -->
+  <div class="row g-2 mb-2">
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">% Ach</span><p id="ach" class="counter text-success">0%</p></div></div>
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Base %</span><p id="baselinePct" class="counter text-info" style="font-size:1rem;">0%</p></div></div>
+    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">% NT Ach</span><p id="ntAchStat" class="counter text-info">0%</p></div></div>
   </div>
 
   <div id="tableView" class="chart-wrapper hidden">
@@ -366,14 +373,15 @@ function loadData() {
   const ntAchVal = stats.nt ? Math.round(((stats.cur - stats.bas) / stats.nt) * 100) : 0;
   
   document.getElementById("current").innerText = stats.cur.toLocaleString();
+  document.getElementById("totalBaseline").innerText = stats.bas.toLocaleString();
   document.getElementById("target").innerText = stats.tar.toLocaleString();
+  document.getElementById("ntTotal").innerText = stats.nt.toLocaleString();
   document.getElementById("ach").innerText = ach + "%";
   document.getElementById("ntAchStat").innerText = ntAchVal + "%";
   
   document.getElementById("bgap").innerText = (stats.cur - stats.bas).toLocaleString();
   document.getElementById("tgap").innerText = (stats.cur - stats.tar).toLocaleString();
   document.getElementById("schools").innerText = stats.schools.size.toLocaleString();
-  document.getElementById("totalBaseline").innerText = stats.bas.toLocaleString();
   document.getElementById("baselinePct").innerText = stats.bas ? Math.round((stats.cur / stats.bas) * 100) + "%" : "0%";
   
   document.getElementById("ach").style.color = ach < 80 ? "#dc3545" : ach < 90 ? "#ffc107" : "#198754";
