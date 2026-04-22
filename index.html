@@ -16,7 +16,11 @@
     .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #6c757d; font-weight: 700; display: block; }
     .counter { font-size: 1.3rem; font-weight: 700; line-height: 1; margin-bottom: 0; }
     .filter-row .form-select, .filter-row .btn { font-size: 0.75rem; padding: 6px 4px; }
-    .table-responsive { font-size: 0.75rem; background: white; border-radius: 8px; }
+    
+    /* STICKY HEADER LOGIC INCORPORATED HERE */
+    .table-responsive { font-size: 0.75rem; background: white; border-radius: 8px; max-height: 500px; overflow-y: auto; }
+    .table-responsive thead th { position: sticky; top: 0; background-color: #fff; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    
     .hidden { display: none; }
     .border-end-custom { border-right: 1px solid #eee; }
 
@@ -70,7 +74,8 @@
             <div class="col-6"><small class="stat-label">Current</small><span id="ins-cur" class="h4 fw-bold text-primary">0</span></div>
             <div class="col-6"><small class="stat-label">Baseline</small><span id="ins-base" class="h4 fw-bold">0</span></div>
             <div class="col-6 border-top pt-2"><small class="stat-label">Target</small><span id="ins-tar" class="h4 fw-bold">0</span></div>
-            <div class="col-6 border-top pt-2"><small class="stat-label">Achievement</small><span id="ins-ach" class="h4 fw-bold">0%</span></div>
+            <div class="col-6 border-top pt-2"><small class="stat-label">% Ach</small><span id="ins-ach" class="h4 fw-bold">0%</span></div>
+            <div class="col-12 border-top pt-2"><small class="stat-label">% NT Ach (New Target)</small><span id="ins-nt-ach" class="h4 fw-bold text-info">0%</span></div>
           </div>
           <div class="mt-3">
             <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Progress to Target</span><span id="ins-ach-bar-label">0%</span></div>
@@ -101,7 +106,6 @@
 </div>
 </div>
 
-<!-- BREAKDOWN MODAL (NEW) -->
 <div id="breakdownModal" class="insight-modal-container">
   <div class="insight-content" id="breakdownContent">
     <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
@@ -116,17 +120,24 @@
       </div>
     </div>
 
-    <!-- BREAKDOWN CHART -->
+    <div class="d-flex justify-content-end mb-2 no-print">
+      <div class="btn-group btn-group-sm" role="group">
+        <input type="radio" class="btn-check" name="bdChartMetric" id="bdMetricAch" value="ach" checked onchange="drawBreakdownChart()">
+        <label class="btn btn-outline-primary" for="bdMetricAch">% Ach</label>
+        <input type="radio" class="btn-check" name="bdChartMetric" id="bdMetricNTAch" value="ntAch" onchange="drawBreakdownChart()">
+        <label class="btn btn-outline-info" for="bdMetricNTAch">% NT Ach</label>
+      </div>
+    </div>
+
     <div id="breakdownChartWrapper" style="background:white;border-radius:12px;padding:15px;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
       <div id="breakdownChartParent" style="position:relative;width:100%;min-height:500px;"><canvas id="breakdownChart"></canvas></div>
     </div>
 
-    <!-- BREAKDOWN TABLE -->
     <div id="breakdownTableWrapper" style="background:white;border-radius:12px;padding:15px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="d-flex align-items-center">
           <select id="breakdownPageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderBreakdownTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
-          <select id="breakdownSortOrder" class="form-select form-select-sm me-1" style="width:100px;" onchange="sortBreakdownData()"><option value="ach">Sort: Ach%</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
+          <select id="breakdownSortOrder" class="form-select form-select-sm me-1" style="width:110px;" onchange="sortBreakdownData()"><option value="ach">Sort: Ach%</option><option value="ntAch">Sort: % NT Ach</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
         </div>
         <span id="breakdownTableLabel" class="fw-bold text-primary small">BREAKDOWN LIST</span>
       </div>
@@ -169,9 +180,10 @@
   </div>
 
   <div class="row g-2 mb-2">
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Achievement</span><p id="ach" class="counter text-success">0%</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Current</span><p id="current" class="counter text-primary">0</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Target</span><p id="target" class="counter text-dark">0</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">% Ach</span><p id="ach" class="counter text-success">0%</p></div></div>
+    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">% NT Ach</span><p id="ntAchStat" class="counter text-info">0%</p></div></div>
   </div>
 
   <div class="row g-2 mb-2">
@@ -186,7 +198,7 @@
     <div class="d-flex justify-content-between align-items-center mb-2">
       <div class="d-flex align-items-center">
         <select id="pageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
-        <select id="sortOrder" class="form-select form-select-sm me-1" style="width:80px;" onchange="sortData()"><option value="ach">Sort: Ach%</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
+        <select id="sortOrder" class="form-select form-select-sm me-1" style="width:110px;" onchange="sortData()"><option value="ach">Sort: Ach%</option><option value="ntAch">Sort: % NT Ach</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
         <button class="btn btn-dark btn-sm me-1" onclick="exportToCSV()">CSV</button>
         <button class="btn btn-danger btn-sm" onclick="exportToPDF()">PDF</button>
       </div>
@@ -201,7 +213,18 @@
     </div>
     <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="pagination"></ul></nav>
   </div>
-  <div id="chartView" class="chart-wrapper"><div id="chartParent"><canvas id="chart"></canvas></div></div>
+  
+  <div id="chartView" class="chart-wrapper">
+    <div class="d-flex justify-content-end mb-2">
+      <div class="btn-group btn-group-sm" role="group">
+        <input type="radio" class="btn-check" name="chartMetric" id="metricAch" value="ach" checked onchange="loadData()">
+        <label class="btn btn-outline-primary" for="metricAch">% Ach</label>
+        <input type="radio" class="btn-check" name="chartMetric" id="metricNTAch" value="ntAch" onchange="loadData()">
+        <label class="btn btn-outline-info" for="metricNTAch">% NT Ach</label>
+      </div>
+    </div>
+    <div id="chartParent"><canvas id="chart"></canvas></div>
+  </div>
 </div>
 
 <script>
@@ -222,10 +245,8 @@ async function convertGoogleSheetData() {
     const lines = csv.split('\n').slice(1); // Skip header
     
     const data = lines.map(line => {
-      // Safely split CSV line ignoring commas inside double quotes
       const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => {
         let val = c.trim();
-        // Remove surrounding double quotes added by Google Sheets export
         if (val.startsWith('"') && val.endsWith('"')) {
           val = val.substring(1, val.length - 1).trim();
         }
@@ -233,18 +254,19 @@ async function convertGoogleSheetData() {
       });
 
       return [
-        cols[0],  // District
-        cols[1],  // Tehsil
-        cols[2],  // Markaz
-        cols[3],  // Wing
-        cols[5],  // EMIS
-        cols[6],  // School
-        parseInt(cols[12]) || 0,  // Baseline
-        parseInt(cols[16]) || 0,  // Current
-        parseInt(cols[17]) || 0,  // Target
-        parseInt(cols[21]) || 0   // Previous
+        cols[0],  // 0: District
+        cols[1],  // 1: Tehsil
+        cols[2],  // 2: Markaz
+        cols[3],  // 3: Wing
+        cols[5],  // 4: EMIS
+        cols[6],  // 5: School
+        parseInt(cols[12]) || 0,  // 6: Baseline
+        parseInt(cols[16]) || 0,  // 7: Current
+        parseInt(cols[17]) || 0,  // 8: Target
+        parseInt(cols[21]) || 0,  // 9: Previous
+        parseInt(cols[13]) || 0   // 10: New Target (NT) - Added
       ];
-    }).filter(r => r[0] && r[0].trim() !== ""); // Filter out true empty rows
+    }).filter(r => r[0] && r[0].trim() !== ""); 
     
     return data;
   } catch (error) {
@@ -253,7 +275,6 @@ async function convertGoogleSheetData() {
   }
 }
 
-// Build filter hierarchy from data
 function buildHierarchy(data) {
   let h = {};
   data.forEach(r => {
@@ -301,7 +322,7 @@ function updateWing() {
   if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`);
   else { let wings = new Set(); Object.values(hierarchy).forEach(obj => Object.keys(obj).forEach(w => wings.add(w))); Array.from(wings).sort().forEach(w => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
   updateViewByDropdown();
-  loadData(); // Auto-load chart on filter change
+  loadData(); 
 }
 
 function updateTehsil() {
@@ -312,7 +333,7 @@ function updateTehsil() {
   else { Object.values(hierarchy).forEach(dist => { if(dist[w]) Object.keys(dist[w]).forEach(t => tehsils.add(t)); }); }
   Array.from(tehsils).sort().forEach(t => tEl.innerHTML += `<option value="${t}">${t}</option>`);
   updateViewByDropdown();
-  loadData(); // Auto-load chart on filter change
+  loadData(); 
 }
 
 function updateMarkaz() {
@@ -323,50 +344,74 @@ function updateMarkaz() {
   else { Object.values(hierarchy).forEach(dist => { if(dist[w] && dist[w][t]) dist[w][t].forEach(m => markazs.add(m)); }); }
   Array.from(markazs).sort().forEach(m => mEl.innerHTML += `<option value="${m}">${m}</option>`);
   updateViewByDropdown();
-  loadData(); // Auto-load chart on filter change
+  loadData(); 
 }
 
 function loadData() {
   showChart();
   const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
   const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
-  let stats = { cur:0, tar:0, bas:0, schools: new Set() };
+  
+  let stats = { cur:0, tar:0, bas:0, nt:0, schools: new Set() };
   let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
+  
   filtered.forEach(r => {
-    stats.cur += r[7]; stats.tar += r[8]; stats.bas += r[6]; if(r[4]) stats.schools.add(r[4]);
+    stats.cur += r[7]; stats.tar += r[8]; stats.bas += r[6]; stats.nt += r[10]; if(r[4]) stats.schools.add(r[4]);
     let key = m ? r[5] : r[keyIdx];
-    if(!groups[key]) groups[key] = { name: key, cur:0, tar:0, bas:0 };
-    groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].bas += r[6];
+    if(!groups[key]) groups[key] = { name: key, cur:0, tar:0, bas:0, nt:0 };
+    groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].bas += r[6]; groups[key].nt += r[10];
   });
+  
   const ach = stats.tar ? Math.round((stats.cur / stats.tar) * 100) : 0;
+  const ntAchVal = stats.nt ? Math.round(((stats.cur - stats.bas) / stats.nt) * 100) : 0;
+  
   document.getElementById("current").innerText = stats.cur.toLocaleString();
   document.getElementById("target").innerText = stats.tar.toLocaleString();
   document.getElementById("ach").innerText = ach + "%";
+  document.getElementById("ntAchStat").innerText = ntAchVal + "%";
+  
   document.getElementById("bgap").innerText = (stats.cur - stats.bas).toLocaleString();
   document.getElementById("tgap").innerText = (stats.cur - stats.tar).toLocaleString();
   document.getElementById("schools").innerText = stats.schools.size.toLocaleString();
   document.getElementById("totalBaseline").innerText = stats.bas.toLocaleString();
   document.getElementById("baselinePct").innerText = stats.bas ? Math.round((stats.cur / stats.bas) * 100) + "%" : "0%";
+  
   document.getElementById("ach").style.color = ach < 80 ? "#dc3545" : ach < 90 ? "#ffc107" : "#198754";
+  document.getElementById("ntAchStat").style.color = ntAchVal < 80 ? "#dc3545" : ntAchVal < 90 ? "#ffc107" : "#0dcaf0";
+  
+  const activeMetric = document.querySelector('input[name="chartMetric"]:checked').value;
+  
   const chartData = Object.values(groups).map(g => {
     const a = g.tar ? (g.cur / g.tar) * 100 : 0;
-    return { name: g.name, ach: a, color: (g.cur < g.bas) ? "#dc3545" : (g.cur < g.tar) ? "#ffc107" : "#198754" };
-  }).sort((a,b) => b.ach - a.ach);
-  drawChart(chartData);
+    const nta = g.nt ? ((g.cur - g.bas) / g.nt) * 100 : 0;
+    
+    // Choose which metric drives the chart height and color
+    const val = activeMetric === 'ntAch' ? nta : a;
+    let color;
+    if (activeMetric === 'ntAch') {
+      color = nta < 80 ? "#dc3545" : nta < 90 ? "#ffc107" : "#0dcaf0";
+    } else {
+      color = (g.cur < g.bas) ? "#dc3545" : (g.cur < g.tar) ? "#ffc107" : "#198754";
+    }
+    
+    return { name: g.name, ach: a, ntAch: nta, val: val, color: color };
+  }).sort((a,b) => b.val - a.val);
+  
+  drawChart(chartData, activeMetric);
 }
 
-function drawChart(data) {
+function drawChart(data, metricLabel) {
   const ctx = document.getElementById("chart"); if (chart) chart.destroy();
   const chartHeight = Math.max(500, data.length * 25); document.getElementById("chartParent").style.height = chartHeight + "px";
   const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2; // Determine which level we're at
   
   chart = new Chart(ctx, {
     type: 'bar', 
     data: { 
       labels: data.map(d => d.name), 
       datasets: [{ 
-        data: data.map(d => d.ach.toFixed(1)), 
+        label: metricLabel === 'ntAch' ? '% NT Ach' : '% Ach',
+        data: data.map(d => d.val.toFixed(1)), 
         backgroundColor: data.map(d => d.color) 
       }] 
     },
@@ -381,19 +426,14 @@ function drawChart(data) {
           const index = activeElements[0].index;
           const selectedName = data[index].name;
           
-          // Auto-filter based on current scope level
-          if (!d) { // If no district selected, clicking selects a district
-            document.getElementById("district").value = selectedName;
-            updateWing();
-          } else if (!w) { // If no wing selected, clicking selects a wing
-            document.getElementById("wing").value = selectedName;
-            updateTehsil();
-          } else if (!t) { // If no tehsil selected, clicking selects a tehsil
-            document.getElementById("tehsil").value = selectedName;
-            updateMarkaz();
-          } else if (!m) { // If no markaz selected, clicking selects a markaz
-            document.getElementById("markaz").value = selectedName;
-            loadData();
+          if (!d) { 
+            document.getElementById("district").value = selectedName; updateWing();
+          } else if (!w) { 
+            document.getElementById("wing").value = selectedName; updateTehsil();
+          } else if (!t) { 
+            document.getElementById("tehsil").value = selectedName; updateMarkaz();
+          } else if (!m) { 
+            document.getElementById("markaz").value = selectedName; loadData();
           }
         }
       }
@@ -407,36 +447,57 @@ function loadTable(type) {
   const labelMap = { 'all': 'Summary List', 'all_schools': 'All Schools List', 'below_baseline': 'Below Baseline List', 'below_target': 'Below Target List', 'above_baseline': 'Above Baseline List', 'above_target': 'Above Target List' };
   document.getElementById("tableLabel").innerText = `${labelMap[type]} - ${m || t || w || d || "Punjab"}`;
   const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
+  
   let tableData = [];
-  if (type !== 'all' || m) { tableData = filtered.map(r => ({ name: r[5], emis: r[4], markaz: r[2], bas: r[6], cur: r[7], tar: r[8], prev: r[9], dist: r[0], teh: r[1], wing: r[3] })); }
-  else {
+  if (type !== 'all' || m) { 
+    tableData = filtered.map(r => ({ name: r[5], emis: r[4], markaz: r[2], bas: r[6], cur: r[7], tar: r[8], prev: r[9], nt: r[10], dist: r[0], teh: r[1], wing: r[3] })); 
+  } else {
     let groups = {}; let keyIdx = !d ? 0 : !w ? 3 : !t ? 1 : 2;
-    filtered.forEach(r => { let key = r[keyIdx]; if(!groups[key]) groups[key] = { name: key, bas:0, cur:0, tar:0, prev:0 }; groups[key].bas += r[6]; groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].prev += r[9]; });
+    filtered.forEach(r => { 
+      let key = r[keyIdx]; 
+      if(!groups[key]) groups[key] = { name: key, bas:0, cur:0, tar:0, prev:0, nt:0 }; 
+      groups[key].bas += r[6]; groups[key].cur += r[7]; groups[key].tar += r[8]; groups[key].prev += r[9]; groups[key].nt += r[10]; 
+    });
     tableData = Object.values(groups);
   }
+  
   if (type === "below_baseline") tableData = tableData.filter(s => s.cur < s.bas);
   else if (type === "below_target") tableData = tableData.filter(s => s.cur < s.tar);
   else if (type === "above_baseline") tableData = tableData.filter(s => s.cur >= s.bas);
   else if (type === "above_target") tableData = tableData.filter(s => s.cur >= s.tar);
-  fullTableData = tableData.map(s => { s.ach = s.tar ? (s.cur / s.tar) * 100 : 0; s.color = (s.cur < s.bas) ? "#dc3545" : (s.cur < s.tar) ? "#ffc107" : "#198754"; return s; });
+  
+  fullTableData = tableData.map(s => { 
+    s.ach = s.tar ? (s.cur / s.tar) * 100 : 0; 
+    s.ntAch = s.nt ? ((s.cur - s.bas) / s.nt) * 100 : 0;
+    s.color = (s.cur < s.bas) ? "#dc3545" : (s.cur < s.tar) ? "#ffc107" : "#198754"; 
+    s.ntColor = s.ntAch < 80 ? "#dc3545" : s.ntAch < 90 ? "#ffc107" : "#0dcaf0";
+    return s; 
+  });
+  
   sortData(); showTable();
 }
 
 function sortData() {
   const val = document.getElementById("sortOrder").value;
-  fullTableData.sort((a, b) => { if (val === 'name') return a.name.localeCompare(b.name); if (val === 'emis') return (a.emis || "").localeCompare(b.emis || ""); if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || ""); return b.ach - a.ach; });
+  fullTableData.sort((a, b) => { 
+    if (val === 'name') return a.name.localeCompare(b.name); 
+    if (val === 'emis') return (a.emis || "").localeCompare(b.emis || ""); 
+    if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || ""); 
+    if (val === 'ntAch') return b.ntAch - a.ntAch;
+    return b.ach - a.ach; 
+  });
   currentPage = 1; renderTable();
 }
 
 function renderTable() {
   const size = parseInt(document.getElementById("pageSize").value), start = (currentPage - 1) * size, pageData = fullTableData.slice(start, start + size);
   const isSchool = currentFilterType !== 'all' || document.getElementById("markaz").value;
-  document.getElementById("tableHead").innerHTML = `<tr><th>Sr.</th><th>${isSchool ? 'School / Markaz' : 'Name'}</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr>`;
+  document.getElementById("tableHead").innerHTML = `<tr><th>Sr.</th><th>${isSchool ? 'School / Markaz' : 'Name'}</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th><th>% NT Ach</th></tr>`;
   let html = "";
   pageData.forEach((s, i) => {
     let srNo = start + i + 1; let delta = s.cur - s.prev; let dIcon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→"; let dColor = delta > 0 ? "#198754" : delta < 0 ? "#dc3545" : "#6c757d";
     let nameLine = s.emis ? `<small class="text-muted">${s.emis}</small> | <small class="text-primary">${s.markaz}</small><br><strong>${s.name}</strong>` : `<strong>${s.name}</strong>`;
-    html += `<tr><td>${srNo}</td><td>${nameLine}</td><td>${s.bas.toLocaleString()}</td><td>${s.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${s.tar.toLocaleString()}</td><td class="fw-bold" style="color:${s.color}">${s.ach.toFixed(1)}%</td></tr>`;
+    html += `<tr><td>${srNo}</td><td>${nameLine}</td><td>${s.bas.toLocaleString()}</td><td>${s.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${s.tar.toLocaleString()}</td><td class="fw-bold" style="color:${s.color}">${s.ach.toFixed(1)}%</td><td class="fw-bold" style="color:${s.ntColor}">${s.ntAch.toFixed(1)}%</td></tr>`;
   });
   document.getElementById("tableBody").innerHTML = html; renderPagination();
 }
@@ -460,16 +521,26 @@ function showInsights() {
   document.getElementById("insightScopeLabel").innerText = m || t || w || d || "PUNJAB";
 
   const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
-  let totCur = 0, totBas = 0, totTar = 0, totPrev = 0, schoolsBB = 0, schoolsBT = 0, schoolsAT = 0;
-  filtered.forEach(r => { totCur += r[7]; totBas += r[6]; totTar += r[8]; totPrev += r[9]; if (r[7] < r[6]) schoolsBB++; else if (r[7] < r[8]) schoolsBT++; else schoolsAT++; });
+  let totCur = 0, totBas = 0, totTar = 0, totPrev = 0, totNt = 0, schoolsBB = 0, schoolsBT = 0, schoolsAT = 0;
+  
+  filtered.forEach(r => { 
+    totCur += r[7]; totBas += r[6]; totTar += r[8]; totPrev += r[9]; totNt += r[10];
+    if (r[7] < r[6]) schoolsBB++; else if (r[7] < r[8]) schoolsBT++; else schoolsAT++; 
+  });
 
   const achPct = totTar ? Math.round((totCur / totTar) * 100) : 0;
+  const ntAchPct = totNt ? Math.round(((totCur - totBas) / totNt) * 100) : 0;
   const basePct = totBas ? Math.round((totCur / totBas) * 100) : 0;
+  
   document.getElementById("ins-cur").innerText = totCur.toLocaleString();
   document.getElementById("ins-base").innerText = totBas.toLocaleString();
   document.getElementById("ins-tar").innerText = totTar.toLocaleString();
   document.getElementById("ins-ach").innerText = achPct + "%";
+  document.getElementById("ins-nt-ach").innerText = ntAchPct + "%";
+  
   document.getElementById("ins-ach").style.color = achPct < 80 ? "#dc3545" : achPct < 90 ? "#ffc107" : "#198754";
+  document.getElementById("ins-nt-ach").style.color = ntAchPct < 80 ? "#dc3545" : ntAchPct < 90 ? "#ffc107" : "#0dcaf0";
+  
   document.getElementById("ins-sch-total").innerText = filtered.length;
   document.getElementById("ins-sch-bb").innerText = schoolsBB;
   document.getElementById("ins-sch-bt").innerText = schoolsBT;
@@ -492,21 +563,29 @@ function showInsights() {
 
 function buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, totTar, achPct, schoolsBB, totalDelta) {
   const container = document.getElementById("ins-dynamic-section"); container.innerHTML = "";
+  
   function aggregateBy(keyIdx) {
     let groups = {}; filtered.forEach(r => {
       const key = r[keyIdx]; if (!key) return;
-      if (!groups[key]) groups[key] = { name: key, cur: 0, bas: 0, tar: 0, prev: 0, total: 0 };
-      groups[key].cur += r[7]; groups[key].bas += r[6]; groups[key].tar += r[8]; groups[key].prev += r[9]; groups[key].total++;
+      if (!groups[key]) groups[key] = { name: key, cur: 0, bas: 0, tar: 0, prev: 0, nt: 0, total: 0 };
+      groups[key].cur += r[7]; groups[key].bas += r[6]; groups[key].tar += r[8]; groups[key].prev += r[9]; groups[key].nt += r[10]; groups[key].total++;
     });
-    return Object.values(groups).map(g => { g.ach = g.tar ? (g.cur / g.tar) * 100 : 0; g.delta = g.cur - g.prev; g.color = g.cur < g.bas ? "#dc3545" : g.cur < g.tar ? "#ffc107" : "#198754"; return g; }).sort((a, b) => a.ach - b.ach);
+    return Object.values(groups).map(g => { 
+      g.ach = g.tar ? (g.cur / g.tar) * 100 : 0; 
+      g.ntAch = g.nt ? ((g.cur - g.bas) / g.nt) * 100 : 0;
+      g.delta = g.cur - g.prev; 
+      g.color = g.cur < g.bas ? "#dc3545" : g.cur < g.tar ? "#ffc107" : "#198754"; 
+      g.ntColor = g.ntAch < 80 ? "#dc3545" : g.ntAch < 90 ? "#ffc107" : "#0dcaf0";
+      return g; 
+    }).sort((a, b) => a.ach - b.ach);
   }
 
   function miniTable(title, rows, accentClass, showSchoolCount) {
     let rowsHtml = rows.map((r, i) => {
       const dColor = r.delta > 0 ? "#198754" : r.delta < 0 ? "#dc3545" : "#6c757d";
-      return `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i+1}</span></td><td><strong>${r.name}</strong></td>${showSchoolCount ? `<td>${r.total}</td>` : ''}<td>${r.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${r.delta>0?'+':''}${r.delta}</td><td style="font-weight:700;color:${r.color};">${r.ach.toFixed(1)}%</td></tr>`;
+      return `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i+1}</span></td><td><strong>${r.name}</strong></td>${showSchoolCount ? `<td>${r.total}</td>` : ''}<td>${r.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${r.delta>0?'+':''}${r.delta}</td><td style="font-weight:700;color:${r.color};">${r.ach.toFixed(1)}%</td><td style="font-weight:700;color:${r.ntColor};">${r.ntAch.toFixed(1)}%</td></tr>`;
     }).join("");
-    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th>${showSchoolCount ? '<th>Schools</th>' : ''}<th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th>${showSchoolCount ? '<th>Schools</th>' : ''}<th>Curr</th><th>Δ</th><th>Ach%</th><th>%NT</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
   }
 
   let html = ""; let criticalInfo = ""; let deltaMsg = totalDelta > 0 ? `increased by ${totalDelta}` : totalDelta < 0 ? `decreased by ${Math.abs(totalDelta)}` : "remained stagnant";
@@ -524,11 +603,15 @@ function buildDynamicSection(scopeLevel, filtered, d, w, t, m, totCur, totBas, t
     criticalInfo = `${markazs.length} markaz. Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
   } else if (scopeLevel === 3) {
     const markazs = aggregateBy(2); const b5sch = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0)).slice(0,5);
-    html += `<div class="col-md-6">${miniTable("Markaz Performance", markazs, "accent-blue", true)}</div><div class="col-md-6"><div class="info-card-nb accent-red h-100"><div class="section-header">Bottom 5 Schools</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>School</th><th>Curr</th><th>Δ</th><th>Ach%</th></tr></thead><tbody>${b5sch.map((s,i)=>`<tr><td><span class="rank-badge" style="background:#dc3545;color:white;">${i+1}</span></td><td><small>${s[2]}</small><br><strong>${s[5]}</strong></td><td>${s[7]}</td><td style="color:${s[7]-s[9]>0?"#198754":"#dc3545"};font-weight:700;">${s[7]-s[9]}</td><td style="font-weight:700;color:#dc3545;">${(s[7]/s[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
+    html += `<div class="col-md-6">${miniTable("Markaz Performance", markazs, "accent-blue", true)}</div><div class="col-md-6"><div class="info-card-nb accent-red h-100"><div class="section-header">Bottom 5 Schools</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>School</th><th>Curr</th><th>Δ</th><th>Ach%</th><th>%NT</th></tr></thead><tbody>${b5sch.map((s,i)=>{
+      const a=(s[8]?s[7]/s[8]*100:0); const nta=(s[10]?(s[7]-s[6])/s[10]*100:0);
+      return `<tr><td><span class="rank-badge" style="background:#dc3545;color:white;">${i+1}</span></td><td><small>${s[2]}</small><br><strong>${s[5]}</strong></td><td>${s[7]}</td><td style="color:${s[7]-s[9]>0?"#198754":"#dc3545"};font-weight:700;">${s[7]-s[9]}</td><td style="font-weight:700;color:#dc3545;">${a.toFixed(1)}%</td><td style="font-weight:700;color:${nta<80?"#dc3545":nta<90?"#ffc107":"#0dcaf0"};">${nta.toFixed(1)}%</td></tr>`}).join("")}</tbody></table></div></div></div>`;
     criticalInfo = `Markaz ${markazs[0].name} is most critical at ${markazs[0].ach.toFixed(1)}%.`;
   } else if (scopeLevel === 4) {
     const schools = [...filtered].sort((a,b) => (a[8]?a[7]/a[8]:0) - (b[8]?b[7]/b[8]:0));
-    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f1f5f9;"><tr><th>School</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr></thead><tbody>${schools.map(r=>`<tr><td><small>${r[4]}</small><br><strong>${r[5]}</strong></td><td>${r[6]}</td><td>${r[7]}</td><td style="color:${r[7]-r[9]>0?"#198754":"#dc3545"};font-weight:700;">${r[7]-r[9]}</td><td>${r[8]}</td><td style="font-weight:700;color:${r[7]<r[6]?"#dc3545":r[7]<r[8]?"#ffc107":"#198754"};">${(r[7]/r[8]*100).toFixed(1)}%</td></tr>`).join("")}</tbody></table></div></div></div>`;
+    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f1f5f9;"><tr><th>School</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th><th>%NT</th></tr></thead><tbody>${schools.map(r=>{
+      const nta = r[10] ? ((r[7]-r[6])/r[10]*100) : 0;
+      return `<tr><td><small>${r[4]}</small><br><strong>${r[5]}</strong></td><td>${r[6]}</td><td>${r[7]}</td><td style="color:${r[7]-r[9]>0?"#198754":"#dc3545"};font-weight:700;">${r[7]-r[9]}</td><td>${r[8]}</td><td style="font-weight:700;color:${r[7]<r[6]?"#dc3545":r[7]<r[8]?"#ffc107":"#198754"};">${(r[7]/r[8]*100).toFixed(1)}%</td><td style="font-weight:700;color:${nta<80?"#dc3545":nta<90?"#ffc107":"#0dcaf0"};">${nta.toFixed(1)}%</td></tr>`}).join("")}</tbody></table></div></div></div>`;
     criticalInfo = `Most critical school is ${schools[0][5]} at ${(schools[0][7]/schools[0][8]*100).toFixed(1)}%.`;
   }
 
@@ -567,24 +650,24 @@ function exportToPDF() {
   let head, body, colStyles;
 
   if (isSchoolTable) {
-    head = [['Sr.', 'EMIS', 'School Name', 'Markaz', 'Base', 'Curr', 'Delta', 'Targ', 'Ach%']];
+    head = [['Sr.', 'EMIS', 'School Name', 'Markaz', 'Base', 'Curr', 'Delta', 'Targ', 'Ach%', 'NT Ach%']];
     body = fullTableData.map((s, i) => {
       const gap = s.cur - s.bas;
       const gapText = gap > 0 ? `+${gap}` : gap;
-      return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
+      return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
     colStyles = {
-      0: { cellWidth: 8 }, 1: { cellWidth: 18 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }
+      0: { cellWidth: 7 }, 1: { cellWidth: 16 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }
     };
   } else {
-    head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%']];
+    head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%', 'NT Ach%']];
     body = fullTableData.map((s, i) => {
       const gap = s.cur - s.bas;
       const gapText = gap > 0 ? `+${gap}` : gap;
-      return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%'];
+      return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
     colStyles = {
-      0: { cellWidth: 10 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }
+      0: { cellWidth: 9 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }
     };
   }
 
@@ -592,12 +675,19 @@ function exportToPDF() {
     startY: 30, head: head, body: body, theme: 'striped', styles: { fontSize: 7, cellPadding: 2 },
     headStyles: { fillColor: [30, 58, 95], textColor: 255 }, columnStyles: colStyles,
     didParseCell: function(data) {
-      const lastIdx = isSchoolTable ? 8 : 6;
-      if (data.section === 'body' && data.column.index === lastIdx) {
+      const achIdx = isSchoolTable ? 8 : 6;
+      if (data.section === 'body' && data.column.index === achIdx) {
         const val = parseFloat(data.cell.raw);
         if (val < 80) data.cell.styles.textColor = [220, 53, 69];
         else if (val < 90) data.cell.styles.textColor = [253, 126, 20];
         else data.cell.styles.textColor = [25, 135, 84];
+      }
+      const ntAchIdx = isSchoolTable ? 9 : 7;
+      if (data.section === 'body' && data.column.index === ntAchIdx) {
+        const val = parseFloat(data.cell.raw);
+        if (val < 80) data.cell.styles.textColor = [220, 53, 69];
+        else if (val < 90) data.cell.styles.textColor = [253, 126, 20];
+        else data.cell.styles.textColor = [13, 202, 240];
       }
       const gapIdx = isSchoolTable ? 6 : 4;
       if (data.section === 'body' && data.column.index === gapIdx) {
@@ -614,11 +704,11 @@ function exportToPDF() {
 /* CSV EXPORT */
 function exportToCSV() {
   const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
-  let csv = isSchool ? "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Baseline,Current,Delta,Target,Ach%\n" : "Sr.,Name,Baseline,Current,Delta,Target,Ach%\n";
+  let csv = isSchool ? "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Baseline,Current,Delta,Target,Ach%,NT Ach%\n" : "Sr.,Name,Baseline,Current,Delta,Target,Ach%,NT Ach%\n";
   fullTableData.forEach((s, i) => {
     let delta = s.cur - s.prev;
-    if (isSchool) csv += `"${i+1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
-    else csv += `"${i+1}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%\n`;
+    if (isSchool) csv += `"${i+1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%,${s.ntAch.toFixed(2)}%\n`;
+    else csv += `"${i+1}","${s.name}",${s.bas},${s.cur},${delta},${s.tar},${s.ach.toFixed(2)}%,${s.ntAch.toFixed(2)}%\n`;
   });
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
   link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
@@ -654,13 +744,15 @@ function openBreakdownModal() {
   
   filtered.forEach(r => {
     const key = r[keyIdx];
-    if (!breakdownData[key]) breakdownData[key] = { name: key, bas:0, cur:0, tar:0, prev:0 };
-    breakdownData[key].bas += r[6]; breakdownData[key].cur += r[7]; breakdownData[key].tar += r[8]; breakdownData[key].prev += r[9];
+    if (!breakdownData[key]) breakdownData[key] = { name: key, bas:0, cur:0, tar:0, prev:0, nt:0 };
+    breakdownData[key].bas += r[6]; breakdownData[key].cur += r[7]; breakdownData[key].tar += r[8]; breakdownData[key].prev += r[9]; breakdownData[key].nt += r[10];
   });
   
   breakdownFullData = Object.values(breakdownData).map(item => {
     item.ach = item.tar ? (item.cur / item.tar) * 100 : 0;
+    item.ntAch = item.nt ? ((item.cur - item.bas) / item.nt) * 100 : 0;
     item.color = (item.cur < item.bas) ? "#dc3545" : (item.cur < item.tar) ? "#ffc107" : "#198754";
+    item.ntColor = item.ntAch < 80 ? "#dc3545" : item.ntAch < 90 ? "#ffc107" : "#0dcaf0";
     return item;
   });
   
@@ -683,13 +775,16 @@ function drawBreakdownChart() {
   const ctx = document.getElementById("breakdownChart"); if (breakdownChart) breakdownChart.destroy();
   const chartHeight = Math.max(400, breakdownFullData.length * 25); document.getElementById("breakdownChartParent").style.height = chartHeight + "px";
   
+  const activeMetric = document.querySelector('input[name="bdChartMetric"]:checked').value;
+  
   breakdownChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: breakdownFullData.map(d => d.name),
       datasets: [{
-        data: breakdownFullData.map(d => d.ach.toFixed(1)),
-        backgroundColor: breakdownFullData.map(d => d.color)
+        label: activeMetric === 'ntAch' ? '% NT Ach' : '% Ach',
+        data: breakdownFullData.map(d => activeMetric === 'ntAch' ? d.ntAch.toFixed(1) : d.ach.toFixed(1)),
+        backgroundColor: breakdownFullData.map(d => activeMetric === 'ntAch' ? d.ntColor : d.color)
       }]
     },
     options: {
@@ -703,19 +798,12 @@ function drawBreakdownChart() {
           const index = activeElements[0].index;
           const selectedName = breakdownFullData[index].name;
           
-          const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value;
           if (breakdownLevel === "wing") {
-            document.getElementById("wing").value = selectedName;
-            updateTehsil();
-            closeBreakdownModal();
+            document.getElementById("wing").value = selectedName; updateTehsil(); closeBreakdownModal();
           } else if (breakdownLevel === "tehsil") {
-            document.getElementById("tehsil").value = selectedName;
-            updateMarkaz();
-            closeBreakdownModal();
+            document.getElementById("tehsil").value = selectedName; updateMarkaz(); closeBreakdownModal();
           } else if (breakdownLevel === "markaz") {
-            document.getElementById("markaz").value = selectedName;
-            closeBreakdownModal();
-            loadData();
+            document.getElementById("markaz").value = selectedName; closeBreakdownModal(); loadData();
           }
         }
       }
@@ -729,6 +817,7 @@ function sortBreakdownData() {
     if (val === 'name') return a.name.localeCompare(b.name);
     if (val === 'emis') return (a.emis || "").localeCompare(b.emis || "");
     if (val === 'markaz') return (a.markaz || "").localeCompare(b.markaz || "");
+    if (val === 'ntAch') return b.ntAch - a.ntAch;
     return b.ach - a.ach;
   });
   breakdownCurrentPage = 1; renderBreakdownTable();
@@ -736,11 +825,11 @@ function sortBreakdownData() {
 
 function renderBreakdownTable() {
   const size = parseInt(document.getElementById("breakdownPageSize").value), start = (breakdownCurrentPage - 1) * size, pageData = breakdownFullData.slice(start, start + size);
-  document.getElementById("breakdownTableHead").innerHTML = `<tr><th>Sr.</th><th>Name</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th></tr>`;
+  document.getElementById("breakdownTableHead").innerHTML = `<tr><th>Sr.</th><th>Name</th><th>Base</th><th>Curr</th><th>Δ</th><th>Targ</th><th>Ach%</th><th>% NT Ach</th></tr>`;
   let html = "";
   pageData.forEach((item, i) => {
     let srNo = start + i + 1; let delta = item.cur - item.prev; let dIcon = delta > 0 ? "↑" : delta < 0 ? "↓" : "→"; let dColor = delta > 0 ? "#198754" : delta < 0 ? "#dc3545" : "#6c757d";
-    html += `<tr style="cursor:pointer;" onclick="handleBreakdownRowClick('${item.name}')"><td>${srNo}</td><td><strong>${item.name}</strong></td><td>${item.bas.toLocaleString()}</td><td>${item.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${item.tar.toLocaleString()}</td><td class="fw-bold" style="color:${item.color}">${item.ach.toFixed(1)}%</td></tr>`;
+    html += `<tr style="cursor:pointer;" onclick="handleBreakdownRowClick('${item.name}')"><td>${srNo}</td><td><strong>${item.name}</strong></td><td>${item.bas.toLocaleString()}</td><td>${item.cur.toLocaleString()}</td><td style="color:${dColor};font-weight:700;">${dIcon}${delta}</td><td>${item.tar.toLocaleString()}</td><td class="fw-bold" style="color:${item.color}">${item.ach.toFixed(1)}%</td><td class="fw-bold" style="color:${item.ntColor}">${item.ntAch.toFixed(1)}%</td></tr>`;
   });
   document.getElementById("breakdownTableBody").innerHTML = html; renderBreakdownPagination();
 }
@@ -754,27 +843,20 @@ function renderBreakdownPagination() {
 function goToBreakdownPage(p) { breakdownCurrentPage = p; renderBreakdownTable(); }
 
 function handleBreakdownRowClick(itemName) {
-  const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value;
   if (breakdownLevel === "wing") {
-    document.getElementById("wing").value = itemName;
-    updateTehsil();
-    closeBreakdownModal();
+    document.getElementById("wing").value = itemName; updateTehsil(); closeBreakdownModal();
   } else if (breakdownLevel === "tehsil") {
-    document.getElementById("tehsil").value = itemName;
-    updateMarkaz();
-    closeBreakdownModal();
+    document.getElementById("tehsil").value = itemName; updateMarkaz(); closeBreakdownModal();
   } else if (breakdownLevel === "markaz") {
-    document.getElementById("markaz").value = itemName;
-    closeBreakdownModal();
-    loadData();
+    document.getElementById("markaz").value = itemName; closeBreakdownModal(); loadData();
   }
 }
 
 function exportBreakdownCSV() {
-  let csv = "Sr.,Name,Baseline,Current,Delta,Target,Ach%\n";
+  let csv = "Sr.,Name,Baseline,Current,Delta,Target,Ach%,NT Ach%\n";
   breakdownFullData.forEach((item, i) => {
     let delta = item.cur - item.prev;
-    csv += `"${i+1}","${item.name}",${item.bas},${item.cur},${delta},${item.tar},${item.ach.toFixed(2)}%\n`;
+    csv += `"${i+1}","${item.name}",${item.bas},${item.cur},${delta},${item.tar},${item.ach.toFixed(2)}%,${item.ntAch.toFixed(2)}%\n`;
   });
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
   link.href = URL.createObjectURL(blob); link.setAttribute("download", `breakdown_${breakdownLevel}_${new Date().getTime()}.csv`); link.click();
@@ -861,7 +943,6 @@ function exportInsightPDF() {
     const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
     const finalDoc = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidth, pdfImgHeight + (margin * 2)] });
     finalDoc.addImage(imgData, 'PNG', margin, margin, innerWidth, pdfImgHeight, undefined, 'FAST');
-    // Use same naming logic as CSV and table PDF exports
     finalDoc.save(getExportFileName("pdf"));
   }).catch(err => {
     console.error("Export Error:", err);
