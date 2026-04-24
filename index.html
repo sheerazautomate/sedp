@@ -674,9 +674,16 @@ function exportToPDF() {
       const gapText = gap > 0 ? `+${gap}` : gap;
       return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
-    colStyles = {
-      0: { cellWidth: 9 }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }
-    };
+   colStyles = {
+  0: { cellWidth: 9, halign: 'center' },
+  1: { cellWidth: 'auto', halign: 'left' },
+  2: { cellWidth: 20, halign: 'center' },
+  3: { cellWidth: 20, halign: 'center' },
+  4: { cellWidth: 18, halign: 'center' },
+  5: { cellWidth: 20, halign: 'center' },
+  6: { cellWidth: 18, halign: 'center' },
+  7: { cellWidth: 20, halign: 'center' }
+};
   }
 
   doc.autoTable({
