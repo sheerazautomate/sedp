@@ -660,7 +660,7 @@ function exportToPDF() {
   if (isSchoolTable) {
     head = [['Sr.', 'EMIS', 'School Name', 'Markaz', 'Base', 'Curr', 'Delta', 'Targ', 'Ach%', 'NT Ach%']];
     body = fullTableData.map((s, i) => {
-      const gap = s.cur - s.bas;
+      const gap = s.cur - s.prev;
       const gapText = gap > 0 ? `+${gap}` : gap;
       return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
@@ -670,7 +670,7 @@ function exportToPDF() {
   } else {
     head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%', 'NT Ach%']];
     body = fullTableData.map((s, i) => {
-      const gap = s.cur - s.bas;
+      const gap = s.cur - s.prev;
       const gapText = gap > 0 ? `+${gap}` : gap;
       return [i + 1, s.name, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
