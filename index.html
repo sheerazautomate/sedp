@@ -665,7 +665,7 @@ function exportToPDF() {
       return [i + 1, s.emis, s.name, s.markaz, s.bas.toLocaleString(), s.cur.toLocaleString(), gapText, s.tar.toLocaleString(), s.ach.toFixed(1) + '%', s.ntAch.toFixed(1) + '%'];
     });
     colStyles = {
-      0: { cellWidth: 7 }, 1: { cellWidth: 16 }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }
+      0: { cellWidth: 7 }, 1: { cellWidth: 16 }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { halign: 'center' }, 9: { halign: 'center' }
     };
   } else {
     head = [['Sr.', 'Name', 'Baseline', 'Current', 'Delta', 'Target', 'Ach%', 'NT Ach%']];
