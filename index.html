@@ -297,7 +297,7 @@ function buildHierarchy(data) {
 window.onload = async () => {
   showLoader("Initializing...");
   try {
-    showLoader("Fetching data from Google Sheets...");
+    showLoader("Fetching data from Database...");
     const data = await convertGoogleSheetData();
     MASTER_DATA = data;
     hierarchy = buildHierarchy(data);
@@ -309,7 +309,7 @@ window.onload = async () => {
     hideLoader();
   } catch (error) {
     console.error('Error:', error);
-    showLoader("❌ Failed to load data. Check that Google Sheet is publicly shared.");
+    showLoader("❌ Failed to load data. Contact Admin");
     setTimeout(hideLoader, 3000);
   }
 };
@@ -482,7 +482,7 @@ function loadTable(type) {
     return s; 
   });
   
-  sortData(); showTable();  updateViewByDropdown();
+  sortData(); showTable();
 }
 
 function sortData() {
