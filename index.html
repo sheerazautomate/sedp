@@ -191,7 +191,17 @@
   <div class="row g-1 mb-2 filter-row">
     <div class="col"><select id="viewBySelect" class="form-select" style="font-size:0.75rem;"><option value="">View by...</option></select></div>
     <div class="col-auto"><button class="btn btn-success btn-sm fw-bold" style="font-size:0.75rem;padding:6px 12px;" onclick="openBreakdownModal()">Update</button></div>
-    <div class="col" style="border-left:1px solid #ddd;padding-left:1rem;"><select id="schoolFilterSelect" class="form-select" style="font-size:0.75rem;"><option value="all">All Schools</option><option value="below_baseline">Below Baseline</option><option value="below_target">Below Target</option><option value="above_baseline">Above Baseline</option><option value="above_target">Above Target</option></select></div>
+    <div class="col" style="border-left:1px solid #ddd;padding-left:1rem;">
+      <!-- CHANGE 1: Added "Above Baseline but Below Target" option -->
+      <select id="schoolFilterSelect" class="form-select" style="font-size:0.75rem;">
+        <option value="all">All Schools</option>
+        <option value="below_baseline">Below Baseline</option>
+        <option value="below_target">Below Target</option>
+        <option value="above_baseline">Above Baseline</option>
+        <option value="above_baseline_below_target">Above Baseline but Below Target</option>
+        <option value="above_target">Above Target</option>
+      </select>
+    </div>
     <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
@@ -468,7 +478,16 @@ function drawChart(data, metricLabel) {
 function loadTable(type) {
   currentFilterType = type;
   const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
-  const labelMap = { 'all': 'Summary List', 'all_schools': 'All Schools List', 'below_baseline': 'Below Baseline List', 'below_target': 'Below Target List', 'above_baseline': 'Above Baseline List', 'above_target': 'Above Target List' };
+  // CHANGE 2: Added label for new filter type
+  const labelMap = {
+    'all': 'Summary List',
+    'all_schools': 'All Schools List',
+    'below_baseline': 'Below Baseline List',
+    'below_target': 'Below Target List',
+    'above_baseline': 'Above Baseline List',
+    'above_baseline_below_target': 'Above Baseline But Below Target List',
+    'above_target': 'Above Target List'
+  };
   document.getElementById("tableLabel").innerText = `${labelMap[type]} - ${m || t || w || d || "Punjab"}`;
   const filtered = MASTER_DATA.filter(r => (!d || r[0] === d) && (!w || r[3] === w) && (!t || r[1] === t) && (!m || r[2] === m));
   
@@ -488,6 +507,8 @@ function loadTable(type) {
   if (type === "below_baseline") tableData = tableData.filter(s => s.cur < s.bas);
   else if (type === "below_target") tableData = tableData.filter(s => s.cur < s.tar);
   else if (type === "above_baseline") tableData = tableData.filter(s => s.cur >= s.bas);
+  // CHANGE 2: Filter logic for new option — above baseline AND below target
+  else if (type === "above_baseline_below_target") tableData = tableData.filter(s => s.cur >= s.bas && s.cur < s.tar);
   else if (type === "above_target") tableData = tableData.filter(s => s.cur >= s.tar);
   
   fullTableData = tableData.map(s => { 
@@ -770,10 +791,22 @@ function exportToCSV() {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }), link = document.createElement("a");
   link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
 }
+
+// CHANGE 3: Added readable label for new filter type in export filename
 function getExportFileName(ext) {
   const d = document.getElementById("district").value, w = document.getElementById("wing").value, t = document.getElementById("tehsil").value, m = document.getElementById("markaz").value;
   let nameParts = ["DEA"]; if (d) nameParts.push(d); if (w) nameParts.push(w); if (t) nameParts.push(t); if (m) nameParts.push(m);
-  return `${nameParts.join("_").replace(/\s+/g, '')}_${currentFilterType}.${ext}`;
+  const filterLabelMap = {
+    'all': 'Summary',
+    'all_schools': 'AllSchools',
+    'below_baseline': 'BelowBaseline',
+    'below_target': 'BelowTarget',
+    'above_baseline': 'AboveBaseline',
+    'above_baseline_below_target': 'AboveBaseline_BelowTarget',
+    'above_target': 'AboveTarget'
+  };
+  const filterLabel = filterLabelMap[currentFilterType] || currentFilterType;
+  return `${nameParts.join("_").replace(/\s+/g, '')}_${filterLabel}.${ext}`;
 }
 
 let breakdownChart = null, breakdownFullData = [], breakdownCurrentPage = 1, breakdownCurrentFilterType = "all", breakdownLevel = "";
@@ -964,6 +997,8 @@ function applySchoolFilter() {
   else if (filterType === "below_baseline") loadTable('below_baseline');
   else if (filterType === "below_target") loadTable('below_target');
   else if (filterType === "above_baseline") loadTable('above_baseline');
+  // CHANGE 2 (applySchoolFilter): Wire up the new filter type
+  else if (filterType === "above_baseline_below_target") loadTable('above_baseline_below_target');
   else if (filterType === "above_target") loadTable('above_target');
 }
 
