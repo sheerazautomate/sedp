@@ -1,0 +1,39 @@
+name: Build Wing map (one-time)
+
+# One-time job: builds data/emis_wing.json from the legacy base sheet so the
+# dashboard can restore the Wing dimension missing from the Grades export.
+# Run once via Actions -> "Build Wing map (one-time)" -> Run workflow.
+# (You can also run it locally: python scripts/export_wing_map.py --url)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build EMIS -> Wing map
+        run: python scripts/export_wing_map.py --url
+
+      - name: Commit wing map
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/emis_wing.json
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "Add one-time EMIS->Wing map"
+            git push
+          fi
+
