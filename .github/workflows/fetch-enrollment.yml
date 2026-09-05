@@ -13,7 +13,10 @@ name: Fetch Grades enrollment
 
 on:
   schedule:
-    - cron: "15 21 * * *"  # 02:15 PKT daily (21:15 UTC previous day)
+    - cron: "0 1 * * *"    # 06:00 PKT (01:00 UTC)
+    - cron: "0 7 * * *"    # 12:00 PKT (07:00 UTC)
+    - cron: "0 13 * * *"   # 18:00 PKT (13:00 UTC)
+    - cron: "59 18 * * *"  # 23:59 PKT (18:59 UTC)
   workflow_dispatch:
     inputs:
       dry_run:
