@@ -71,9 +71,11 @@
       .container { padding-left: 8px; padding-right: 8px; }
       .kpi-group { padding: 10px 8px; min-height: 88px; }
       /* Two cards per line gives each card enough room for full labels and values. */
-      .row.g-2.mb-2 > .col-3,
-      .row.g-2.mb-2 > .col-4,
-      .row.g-2.mb-2 > .col-6 { width: 50%; }
+      .kpi-row-1 > .col-3,
+      .kpi-row-3 > .col-6 { width: 50%; }
+      /* The three-card row uses a full-width Schools card, then two equal gap cards. */
+      .kpi-row-2 > .col-4 { width: 50%; }
+      .kpi-row-2 > .col-4:first-child { width: 100%; }
       .kpi-group .d-flex.justify-content-around {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -89,7 +91,7 @@
       }
       .kpi-group .stat-label { font-size: .58rem; white-space: nowrap; }
       .kpi-group .counter-sm,
-      .kpi-group .counter-t { font-size: clamp(.72rem, 3.8vw, 1rem); line-height: 1.15; overflow-wrap: anywhere; }
+      .kpi-group .counter-t { font-size: clamp(.72rem, 3.8vw, 1rem); line-height: 1.15; overflow-wrap: normal; white-space: nowrap; }
       .kpi-group .d-flex.justify-content-around > div:nth-child(3) .counter-t { font-size: clamp(.85rem, 4.5vw, 1.1rem); }
       .filter-row { --bs-gutter-x: .25rem; }
       .filter-row .btn-group { flex-wrap: wrap; }
@@ -250,7 +252,7 @@
   </div>
 
   <!-- KPI Row 1: Current | Baseline | Target | New Target (each M/F/T) -->
-  <div class="row g-2 mb-2">
+  <div class="row g-2 mb-2 kpi-row kpi-row-1">
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Current Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="currentM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="currentF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="currentT" class="counter-sm counter-t text-primary">0</p></div></div></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="totalBaselineM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="totalBaselineF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="totalBaselineT" class="counter-sm counter-t">0</p></div></div></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Targetted Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="targetM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="targetF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="targetT" class="counter-sm counter-t text-dark">0</p></div></div></div></div>
@@ -258,14 +260,14 @@
   </div>
 
   <!-- KPI Row 2: Schools | Baseline Gap | Target Gap -->
-  <div class="row g-2 mb-2">
+  <div class="row g-2 mb-2 kpi-row kpi-row-2">
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p><small id="schoolsBB" class="text-muted" style="font-size:0.65rem;">0 below baseline</small></div></div>
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="bgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="bgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="bgapT" class="counter-sm counter-t">0</p></div></div></div></div>
     <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="tgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="tgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="tgapT" class="counter-sm counter-t">0</p></div></div></div></div>
   </div>
 
   <!-- KPI Row 3: % Achievement (single metric) | Day Change -->
-  <div class="row g-2 mb-2">
+  <div class="row g-2 mb-2 kpi-row kpi-row-3">
     <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">% Achievement</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="achM" class="counter-sm">0%</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="achF" class="counter-sm">0%</p></div><div><span class="stat-label">Total</span><p id="achT" class="counter-sm counter-t">0%</p></div></div></div></div>
     <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Day Change</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="deltaM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="deltaF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="deltaT" class="counter-sm counter-t">0</p></div></div></div></div>
   </div>
