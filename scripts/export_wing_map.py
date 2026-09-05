@@ -45,12 +45,21 @@ def norm_emis(value):
     return v
 
 
+def norm_col(c):
+    return re.sub(r"[\s_]+", "", (c or "").strip().lower())
+
+
+WING_ALIASES = {"wing", "wname", "wingname"}
+EMIS_ALIASES = {"emis", "emiscode"}
+
+
 def detect_columns(header):
     """Return (emis_idx, wing_idx) from a header row, or (None, None)."""
-    low = [(c or "").strip().lower() for c in header]
-    emis_idx = next((i for i, c in enumerate(low) if "emis" in c), None)
-    wing_idx = next((i for i, c in enumerate(low) if c == "wing"
-                     or "wing" in c), None)
+    low = [norm_col(c) for c in header]
+    emis_idx = next((i for i, c in enumerate(low)
+                     if "emis" in c or c in EMIS_ALIASES), None)
+    wing_idx = next((i for i, c in enumerate(low)
+                     if c in WING_ALIASES or "wing" in c), None)
     if emis_idx is not None and wing_idx is not None:
         return emis_idx, wing_idx
     return None, None
