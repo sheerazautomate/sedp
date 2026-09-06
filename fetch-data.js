@@ -22,7 +22,8 @@
  *
  * Wing resolution per school: emis_wing.json lookup -> Markaz-name keyword
  * fallback (Female/Male; "female" tested BEFORE "male" since it contains the
- * substring) -> "Unknown".
+ * substring) -> "Unknown". Only schools whose resolved wing is SE, M-EE, or
+ * W-EE are kept; Male / Female / Unknown (and any other label) are dropped.
  *
  * Usage (plain <script> include, no modules so it works on GitHub Pages):
  *   const { rows, meta, report } = await loadGradesData();
@@ -162,6 +163,9 @@ function cell(row, i) {
 const RE_FEMALE = /(female|women|girl|girls)|\(\s*f\s*\)/;
 const RE_MALE = /(^|[^a-z])(male|men|boy|boys)([^a-z]|$)|\(\s*m\s*\)/;
 
+/** Grades wing labels we trust. Male / Female / Unknown (and anything else) are dropped. */
+const ALLOWED_WINGS = { SE: true, "M-EE": true, "W-EE": true };
+
 function resolveWing(emis, markaz, wingMap) {
   if (wingMap) {
     const hit = wingMap[emis];
@@ -258,25 +262,33 @@ async function loadGradesData() {
     try { meta = JSON.parse(metaText); } catch (e) { /* ignore */ }
   }
 
-  const rows = parseEnrollmentTable(currentText);
-  let missingPrev = 0, unknownWing = 0;
+  const parsed = parseEnrollmentTable(currentText);
+  let missingPrev = 0, unknownWing = 0, droppedWing = 0;
   const wingValues = {};
-  rows.forEach((s) => {
+  const rows = [];
+  parsed.forEach((s) => {
+    s.w = resolveWing(s.emis, s.m, wingMap);
+    if (s.w === "Unknown") unknownWing++;
+    if (!ALLOWED_WINGS[s.w]) {
+      droppedWing++;
+      return;
+    }
     const p = prevMap[s.emis];
     if (p) { s.prevM = p.curM; s.prevF = p.curF; s.prevT = p.curT; }
     else { s.prevM = 0; s.prevF = 0; s.prevT = 0; missingPrev++; }
-    s.w = resolveWing(s.emis, s.m, wingMap);
-    if (s.w === "Unknown") unknownWing++;
     wingValues[s.w] = (wingValues[s.w] || 0) + 1;
     /* Single % metric: file value for Total, same formula for M/F. */
     s.achT = computeAch(s.curT, s.basT, s.tarT, s.achFile);
     s.achM = computeAch(s.curM, s.basM, s.tarM, null);
     s.achF = computeAch(s.curF, s.basF, s.tarF, null);
     delete s.achFile;
+    rows.push(s);
   });
 
   const report = {
     rows: rows.length,
+    parsed: parsed.length,
+    droppedWing,
     missingPrev,
     unknownWing,
     wings: Object.keys(wingValues).sort(),
@@ -284,8 +296,9 @@ async function loadGradesData() {
     hasWingMap: Object.keys(wingMap).length > 0,
   };
   console.info("[grades] loaded", report);
-  if (unknownWing) {
-    console.warn("[grades] " + unknownWing + " schools fell back to Markaz-name Wing detection.");
+  if (droppedWing) {
+    console.warn("[grades] dropped " + droppedWing +
+      " schools whose Wing is not SE / M-EE / W-EE (Male, Female, Unknown, etc.).");
   }
   return { rows, meta, report };
 }
@@ -293,5 +306,5 @@ async function loadGradesData() {
 /* Export for browsers (<script> tag) and for node-based tests alike. */
 globalThis.GradesLoader = {
   loadGradesData, computeAch, parseCSV, mapColumns, resolveWing,
-  normalizeEmis, parseCount, parsePct, GRADES_PATHS, HEADER_ALIASES,
+  normalizeEmis, parseCount, parsePct, GRADES_PATHS, HEADER_ALIASES, ALLOWED_WINGS,
 };
