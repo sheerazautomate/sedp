@@ -253,7 +253,7 @@
 
   <!-- KPI Row 1: Current | Baseline | Target | New Target (each M/F/T) -->
   <div class="row g-2 mb-2 kpi-row kpi-row-1">
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Current Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="currentM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="currentF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="currentT" class="counter-sm counter-t text-primary">0</p></div></div></div></div>
+    <div class="col-3"><div class="kpi-group text-center position-relative"><span class="stat-label">Current Enrollment</span><small id="currentOther" class="position-absolute top-0 end-0 text-muted" style="font-size:.48rem;" title="Current enrollment reported as Other by school heads">Other: 0</small><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="currentM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="currentF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="currentT" class="counter-sm counter-t text-primary">0</p></div></div></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="totalBaselineM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="totalBaselineF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="totalBaselineT" class="counter-sm counter-t">0</p></div></div></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Targetted Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="targetM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="targetF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="targetT" class="counter-sm counter-t text-dark">0</p></div></div></div></div>
     <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">New Target</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="ntTotalM" class="counter-sm text-info">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="ntTotalF" class="counter-sm text-info">0</p></div><div><span class="stat-label">Total</span><p id="ntTotalT" class="counter-sm counter-t text-info">0</p></div></div></div></div>
@@ -330,11 +330,11 @@ function filterRows(f) {
 }
 
 function sumRows(rows) {
-  const s = { n: rows.length, basM: 0, curM: 0, tarM: 0, prevM: 0, basF: 0, curF: 0, tarF: 0, prevF: 0, basT: 0, curT: 0, tarT: 0, prevT: 0 };
+  const s = { n: rows.length, basM: 0, curM: 0, tarM: 0, prevM: 0, basF: 0, curF: 0, tarF: 0, prevF: 0, basT: 0, curT: 0, tarT: 0, prevT: 0, curOther: 0 };
   rows.forEach((r) => {
     s.basM += r.basM; s.curM += r.curM; s.tarM += r.tarM; s.prevM += r.prevM;
     s.basF += r.basF; s.curF += r.curF; s.tarF += r.tarF; s.prevF += r.prevF;
-    s.basT += r.basT; s.curT += r.curT; s.tarT += r.tarT; s.prevT += r.prevT;
+    s.basT += r.basT; s.curT += r.curT; s.tarT += r.tarT; s.prevT += r.prevT; s.curOther += r.curOther || 0;
   });
   const C = GradesLoader.computeAch;
   s.achM = C(s.curM, s.basM, s.tarM);
@@ -456,6 +456,7 @@ function setTriple(prefix, m, f, t, fmtFn, colorFn) {
 
 function updateKPIs(stats, rows) {
   setTriple("current", stats.curM, stats.curF, stats.curT, fmt);
+  $("currentOther").innerText = "Other: " + fmt(stats.curOther);
   setTriple("totalBaseline", stats.basM, stats.basF, stats.basT, fmt);
   setTriple("target", stats.tarM, stats.tarF, stats.tarT, fmt);
   setTriple("ntTotal", stats.ntM, stats.ntF, stats.ntT, fmt);

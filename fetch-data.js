@@ -57,7 +57,9 @@ const HEADER_ALIASES = {
   female_baseline: ["femalebaseline", "baselinegirls", "girlsbaseline", "fbaseline", "fbase"],
   female_current: ["femalecurrent", "currentgirls", "girlscurrent", "fcurrent", "fcurr"],
   female_target: ["femaletarget", "girlstarget", "targetgirls", "ftarget", "ftarg"],
-  /* Totals are derived as M+F if the export ever drops these columns. */
+  /* Totals are derived from M+F. The export's Total Current is not
+   * reliable: it disagrees with the sex columns for 775 schools, so using it
+   * makes every dashboard total (and day delta) internally inconsistent. */
   total_baseline: ["totalbaseline", "baselinetotal", "totalbase"],
   total_current: ["totalcurrent", "currenttotal", "currentenrolment", "currentenrollment", "totalcurr"],
   total_target: ["totaltarget", "targettotal", "targettedenrolment", "targetedenrolment", "targetedenrollment", "targettedenrollment", "totaltarg"],
@@ -222,9 +224,13 @@ function parseEnrollmentTable(text) {
       emis: normalizeEmis(cell(row, idx.emis)),
       school: String(cell(row, idx.school)).trim(),
       basM, curM, tarM, basF, curF, tarF,
-      basT: idx.total_baseline === -1 ? basM + basF : parseCount(cell(row, idx.total_baseline)),
+      // Grades includes an "Other" category in Total Current that is not
+      // represented by the Male/Female columns. Preserve the official total
+      // and expose the difference instead of silently discarding it.
+      basT: basM + basF,
       curT: idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current)),
-      tarT: idx.total_target === -1 ? tarM + tarF : parseCount(cell(row, idx.total_target)),
+      curOther: (idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current))) - curM - curF,
+      tarT: tarM + tarF,
       achFile: idx.ach === -1 ? null : parsePct(cell(row, idx.ach)),
     });
   }
