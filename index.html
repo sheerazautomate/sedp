@@ -131,27 +131,34 @@
     .kpi-row>[class*="col-"]{display:flex;flex-direction:column}
     .kpi-group{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 12px 12px;
       box-shadow:var(--shadow-card);flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;
-      position:relative;overflow:hidden;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+      align-items:center;position:relative;overflow:hidden;
+      transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
     .kpi-group::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;pointer-events:none;
       background:linear-gradient(90deg,#2563eb,#db2777);opacity:.85}
     .kpi-group:hover{border-color:#dbe2ee;box-shadow:var(--shadow-hover);transform:translateY(-1px)}
     .kpi-group .stat-label{font-size:.55rem;color:#8fa0b8;font-weight:800;letter-spacing:.06em;
       text-transform:uppercase;display:block}
-    .kpi-group>.stat-label{display:block;text-align:center;font-size:.62rem;color:var(--ink-2);
-      letter-spacing:.1em;line-height:1.3;margin-bottom:5px;padding:0 4px}
-    .kpi-group>.stat-label::before{content:"";display:block;width:22px;height:3px;border-radius:2px;
-      margin:0 auto 5px;background:linear-gradient(90deg,#2563eb,#db2777)}
-    .counter{font-size:1.5rem;font-weight:800;line-height:1.1;margin-bottom:0;color:var(--ink)}
-    .counter-sm{font-size:1.12rem;font-weight:800;line-height:1.15;margin-bottom:0;color:#1f2937}
-    .counter-t{font-size:1.4rem;font-weight:800;letter-spacing:-.02em;color:#0f172a}
+    .kpi-group>.stat-label{display:block;text-align:center;font-size:.67rem;font-weight:800;
+      color:var(--ink-2);letter-spacing:.1em;line-height:1.3;margin-bottom:2px;padding:0 6px;
+      text-transform:uppercase}
+    .counter{font-size:1.6rem;font-weight:800;line-height:1.05;margin-bottom:0;color:var(--ink)}
+    .counter-sm{font-size:1.05rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
     .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
-    .kpi-group .d-flex.justify-content-around{display:flex;width:100%;align-items:stretch;justify-content:center}
-    .kpi-group .d-flex.justify-content-around>div{min-width:0;flex:0 1 auto;padding:0 5px;
-      display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
-    .kpi-group .d-flex.justify-content-around>div+div{border-left:1px solid var(--line-soft);padding-left:7px}
+    .kpi-hero{display:block;width:100%;text-align:center;font-size:2.05rem;font-weight:800;
+      letter-spacing:-.02em;line-height:1.08;overflow:hidden;margin:4px 0 0}
+    .kpi-sub{display:flex;width:100%;border-top:1px solid var(--line-soft);
+      margin-top:10px;padding-top:8px}
+    .kpi-sub-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 3px}
+    .kpi-sub-item+.kpi-sub-item{border-left:1px solid var(--line-soft)}
+    .kpi-sub-item>.stat-label{font-size:.55rem;letter-spacing:.09em;margin:0;text-transform:uppercase}
+    .kpi-target-note{display:flex;align-items:baseline;justify-content:center;gap:7px;margin-top:10px;
+      padding-top:8px;border-top:1px dashed var(--line)}
+    .kpi-target-note .lbl{font-size:.58rem;font-weight:700;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
+    .kpi-target-note .val{font-size:1.1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em}
+    .kpi-sub-note{display:block;text-align:center;font-size:.7rem;font-weight:600;color:var(--muted);margin-top:6px}
     .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
       background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
-      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0 auto 2px}
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:7px auto 0}
     .other-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:#f59e0b;flex:0 0 auto}
     .hidden{display:none !important}
 
@@ -213,18 +220,18 @@
     @media (max-width:575.98px){
       .container{padding-left:8px;padding-right:8px}
       .kpi-group{padding:16px 8px 12px;min-height:92px}
-      .kpi-row-1>.col-3,.kpi-row-3>.col-6{width:50%}
+      .kpi-row-1>.col-4,.kpi-row-3>.col-6{width:50%}
       .kpi-row-2>.col-4{width:50%}
       .kpi-row-2>.col-4:first-child{width:100%}
-      .kpi-group .d-flex.justify-content-around{display:grid !important;
-        grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 8px;align-items:end;width:100%}
-      .kpi-group .d-flex.justify-content-around>div{min-width:0;flex:none;border-left:0 !important}
-      .kpi-group .d-flex.justify-content-around>div:nth-child(3){grid-column:1/-1;
-        border-top:1px solid var(--line-soft);padding-top:5px;margin-top:1px}
-      .kpi-group .stat-label{font-size:.56rem;white-space:nowrap}
-      .kpi-group .counter-sm{font-size:clamp(.82rem,4.4vw,1.18rem);line-height:1.15;white-space:nowrap}
-      .kpi-group .counter-t{font-size:clamp(.9rem,4.6vw,1.3rem);line-height:1.15;white-space:nowrap}
-      .kpi-group .d-flex.justify-content-around>div:nth-child(3) .counter-t{font-size:clamp(1.05rem,5.2vw,1.5rem)}
+      .kpi-row-1>.col-4:last-child{width:100%}
+      .kpi-group .stat-label{font-size:.56rem}
+      .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .counter-t{white-space:nowrap}
+      .kpi-hero{font-size:clamp(1.15rem,5.2vw,1.75rem)}
+      .kpi-sub{margin-top:8px;padding-top:7px}
+      .kpi-sub-item>.stat-label{font-size:.5rem}
+      .kpi-sub-item .counter-sm{font-size:clamp(.8rem,3.9vw,1rem)}
+      .kpi-target-note{margin-top:8px;padding-top:7px}
+      .kpi-target-note .val{font-size:.95rem}
       .filter-row{--bs-gutter-x:.25rem}
       .filter-row .form-select{font-size:.68rem;padding-left:9px}
       .filter-row .btn{padding:6px 10px;font-size:.68rem}
@@ -235,7 +242,9 @@
     @media (max-width:380px){
       .kpi-group{padding-left:5px;padding-right:5px}
       .kpi-group .stat-label{font-size:.52rem;letter-spacing:-.15px}
-      .kpi-group .counter-sm{font-size:.76rem}
+      .kpi-hero{font-size:clamp(1.05rem,4.8vw,1.5rem)}
+      .kpi-sub-item .counter-sm{font-size:.78rem}
+      .kpi-target-note .val{font-size:.88rem}
     }
 
   </style>
@@ -396,25 +405,95 @@
     <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
-  <!-- KPI Row 1: Current | Baseline | Target | New Target (each M/F/T) -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-1">
-    <div class="col-3"><div class="kpi-group text-center position-relative"><span class="stat-label">Current Enrollment</span><span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="currentM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="currentF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="currentT" class="counter-sm counter-t text-primary">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="totalBaselineM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="totalBaselineF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="totalBaselineT" class="counter-sm counter-t">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Targetted Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="targetM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="targetF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="targetT" class="counter-sm counter-t text-dark">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">New Target</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="ntTotalM" class="counter-sm text-info">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="ntTotalF" class="counter-sm text-info">0</p></div><div><span class="stat-label">Total</span><p id="ntTotalT" class="counter-sm counter-t text-info">0</p></div></div></div></div>
+  <!-- KPI Row 1: Current | Baseline | Targeted Enrollment (hero total + M/F) -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-1">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Current Enrollment</span>
+        <p id="currentT" class="counter kpi-hero">0</p>
+        <span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="currentM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="currentF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline</span>
+        <p id="totalBaselineT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="totalBaselineM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="totalBaselineF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Targeted Enrollment</span>
+        <p id="targetT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="targetM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="targetF" class="counter-sm">0</span></div>
+        </div>
+        <div class="kpi-target-note"><span class="lbl">New target</span><b class="val" id="targetNewTotal">+0</b><span class="lbl">over baseline</span></div>
+      </div>
+    </div>
   </div>
 
   <!-- KPI Row 2: Schools | Baseline Gap | Target Gap -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-2">
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p><small id="schoolsBB" class="text-muted" style="font-size:0.65rem;">0 below baseline</small></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="bgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="bgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="bgapT" class="counter-sm counter-t">0</p></div></div></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="tgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="tgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="tgapT" class="counter-sm counter-t">0</p></div></div></div></div>
+  <div class="row g-3 mb-3 kpi-row kpi-row-2">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Schools</span>
+        <p id="schools" class="counter text-success">0</p>
+        <small id="schoolsBB" class="kpi-sub-note">0 below baseline</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline Gap</span>
+        <p id="bgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="bgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="bgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Target Gap</span>
+        <p id="tgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="tgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="tgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- KPI Row 3: % Achievement (single metric) | Day Change -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-3">
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">% Achievement</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="achM" class="counter-sm">0%</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="achF" class="counter-sm">0%</p></div><div><span class="stat-label">Total</span><p id="achT" class="counter-sm counter-t">0%</p></div></div></div></div>
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Day Change</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#2563eb">Male</span><p id="deltaM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#db2777">Female</span><p id="deltaF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="deltaT" class="counter-sm counter-t">0</p></div></div></div></div>
+  <!-- KPI Row 3: % Achievement | Day Change -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-3">
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">% Achievement</span>
+        <p id="achT" class="counter kpi-hero">0%</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="achM" class="counter-sm">0%</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="achF" class="counter-sm">0%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Day Change</span>
+        <p id="deltaT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="deltaM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="deltaF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="tableView" class="chart-wrapper hidden">
@@ -482,46 +561,21 @@ function hideLoader() { $("loader").style.display = "none"; }
    Base sizes apply when figures are short; long (9-10 digit) values shrink only
    as needed. Visual-only. */
 function fitKPIValues() {
-  /* Give the widest figure in each card the room it needs at a comfortable font
-     size, then shrink only if it would touch the neighbouring label. */
-  document.querySelectorAll(".kpi-group").forEach((card) => {
-    const row = card.querySelector(".d-flex.justify-content-around");
-    const cells = row ? Array.from(row.children).filter((c) => c.clientWidth > 0) : [];
-    if (!cells.length) return;
-
-    const items = cells.map((cell) => {
-      const val = cell.querySelector(".counter, .counter-sm, .counter-t");
-      const lbl = cell.querySelector(":scope > .stat-label");
-      val.style.fontSize = "";
-      const base = parseFloat(getComputedStyle(val).fontSize) || 18;
-      const labelW = lbl ? lbl.scrollWidth : 0;
-      const avail = Math.max(0, cell.clientWidth - 2);
-      let fs = base;
-      let guard = 0;
-      while (guard++ < 60 && val.scrollWidth > avail && fs > 9) {
-        fs = Math.max(9, fs - 0.5);
-        val.style.fontSize = fs + "px";
-      }
-      return { cell, val, base, labelW, avail, fs };
-    });
-
-    /* The tightest cell decides; never let a neighbour crowd a label. */
-    const minFs = Math.min(...items.map((it) => it.fs));
-    const maxNeed = Math.max(...items.map((it) => it.val.scrollWidth - it.avail));
-    let fs = items[0].base;
-    if (maxNeed > 0) {
-      const tight = items.reduce((a, b) => (b.val.scrollWidth - b.avail > a ? b : a), items[0]);
-      fs = Math.max(9, tight.base * (tight.avail / tight.val.scrollWidth));
-      fs = Math.min(items[0].base, fs);
-    } else {
-      fs = items[0].base;
+  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .kpi-target-note .val").forEach((el) => {
+    el.style.fontSize = "";
+    const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
+    if (!host || host.clientWidth <= 0) return;
+    const avail = Math.max(20, host.clientWidth - 2);
+    if (el.scrollWidth <= avail) return;
+    const hero = el.classList.contains("counter");
+    const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+    const floor = window.innerWidth <= 575.98 ? (hero ? 10 : 8) : (hero ? 13 : 9);
+    let fs = base;
+    let guard = 0;
+    while (guard++ < 80 && el.scrollWidth > avail && fs > floor) {
+      fs = Math.max(floor, fs - 0.25);
+      el.style.fontSize = fs + "px";
     }
-    items.forEach((it) => {
-      it.val.style.fontSize = "";
-      const natural = parseFloat(getComputedStyle(it.val).fontSize) || it.base;
-      const use = Math.max(9, Math.min(it.base, fs));
-      if (use < natural) it.val.style.fontSize = use + "px";
-    });
   });
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitKPIValues());
@@ -663,7 +717,7 @@ function updateKPIs(stats, rows) {
   $("currentOther").innerText = "Other: " + fmt(stats.curOther);
   setTriple("totalBaseline", stats.basM, stats.basF, stats.basT, fmt);
   setTriple("target", stats.tarM, stats.tarF, stats.tarT, fmt);
-  setTriple("ntTotal", stats.ntM, stats.ntF, stats.ntT, fmt);
+  $("targetNewTotal").innerText = signed(stats.ntT);
   $("schools").innerText = fmt(stats.n);
   $("schoolsBB").innerText = fmt(rows.filter((r) => r.curT < r.basT).length) + " below baseline";
   setTriple("bgap", stats.curM - stats.basM, stats.curF - stats.basF, stats.curT - stats.basT, signed, gapColor);
