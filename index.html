@@ -137,19 +137,20 @@
     .kpi-group:hover{border-color:#dbe2ee;box-shadow:var(--shadow-hover);transform:translateY(-1px)}
     .kpi-group .stat-label{font-size:.55rem;color:#8fa0b8;font-weight:800;letter-spacing:.06em;
       text-transform:uppercase;display:block}
-    .kpi-group>.stat-label{display:flex;align-items:center;justify-content:center;gap:7px;
-      font-size:.63rem;color:var(--ink-2);letter-spacing:.12em;margin-bottom:4px}
-    .kpi-group>.stat-label::before{content:"";width:16px;height:3px;border-radius:2px;flex:0 0 auto;
-      background:linear-gradient(90deg,#2563eb,#db2777)}
+    .kpi-group>.stat-label{display:block;text-align:center;font-size:.62rem;color:var(--ink-2);
+      letter-spacing:.1em;line-height:1.3;margin-bottom:5px;padding:0 4px}
+    .kpi-group>.stat-label::before{content:"";display:block;width:22px;height:3px;border-radius:2px;
+      margin:0 auto 5px;background:linear-gradient(90deg,#2563eb,#db2777)}
     .counter{font-size:1.34rem;font-weight:800;line-height:1.1;margin-bottom:0;color:var(--ink)}
     .counter-sm{font-size:.98rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
     .counter-t{font-size:1.18rem;font-weight:800;letter-spacing:-.01em}
+    .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
     .kpi-group .d-flex.justify-content-around{width:100%;align-items:end}
     .kpi-group .d-flex.justify-content-around>div{min-width:0;flex:1 1 0}
     .kpi-group .d-flex.justify-content-around>div+div{border-left:1px solid var(--line-soft)}
-    .other-chip{position:absolute;top:9px;right:10px;z-index:2;font-size:.56rem;font-weight:800;
-      letter-spacing:.03em;color:#b45309;background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;
-      padding:2px 9px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+    .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
+      background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0 auto 2px}
     .other-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:#f59e0b;flex:0 0 auto}
     .hidden{display:none !important}
 
@@ -227,6 +228,7 @@
       .filter-row .btn{padding:6px 10px;font-size:.68rem}
       .filter-row .btn-group{flex-wrap:wrap}
       .filter-row .btn-group .btn{flex:1 1 auto}
+      .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px}
     }
     @media (max-width:380px){
       .kpi-group{padding-left:5px;padding-right:5px}
@@ -474,6 +476,31 @@ function deltaParts(d) {
 function showLoader(txt) { if (txt) $("loaderText").innerText = txt; $("loader").style.display = "flex"; }
 function hideLoader() { $("loader").style.display = "none"; }
 
+/* Scale each KPI figure down (never up) until it fits its own cell, so long
+   9-10 digit totals never overflow or collide on any screen width. Visual-only. */
+function fitKPIValues() {
+  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .counter-t").forEach((el) => {
+    el.style.fontSize = "";
+    const cell = el.parentElement;
+    if (!cell || cell.clientWidth <= 0) return;
+    const avail = cell.clientWidth - 1;
+    let fs = parseFloat(getComputedStyle(el).fontSize) || 16;
+    const floor = Math.min(fs, 7);
+    el.style.fontSize = fs + "px";
+    let guard = 0;
+    while (guard++ < 80 && el.scrollWidth > avail && fs > floor) {
+      fs = Math.max(floor, fs - 0.25);
+      el.style.fontSize = fs + "px";
+    }
+  });
+}
+let __kpiFitTimer = null;
+window.addEventListener("resize", () => {
+  if (__kpiFitTimer) clearTimeout(__kpiFitTimer);
+  __kpiFitTimer = setTimeout(fitKPIValues, 120);
+});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitKPIValues());
+
 function currentFilters() {
   return { d: $("district").value, w: $("wing").value, t: $("tehsil").value, m: $("markaz").value };
 }
@@ -618,6 +645,7 @@ function updateKPIs(stats, rows) {
   setTriple("tgap", stats.curM - stats.tarM, stats.curF - stats.tarF, stats.curT - stats.tarT, signed, gapColor);
   setTriple("ach", stats.achM, stats.achF, stats.achT, (v) => v.toFixed(1) + "%", achColor);
   setTriple("delta", stats.dM, stats.dF, stats.dT, (v) => { const p = deltaParts(v); return p.icon + signed(v); }, (v) => deltaParts(v).color);
+  fitKPIValues();
 }
 
 /* ---------------- Chart ---------------- */
