@@ -39,7 +39,8 @@
       --radius:16px; --radius-sm:10px;
       --bs-primary:#2563eb; --bs-primary-rgb:37,99,235;
     }
-    @keyframes spin{100%{transform:rotate(360deg)}}
+    @keyframes syncBlink{0%,100%{opacity:1}50%{opacity:.12}}
+    @keyframes softPulse{0%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}}
     body{
       background:
         radial-gradient(1100px 480px at 12% -8%, rgba(37,99,235,.07), transparent 60%),
@@ -72,6 +73,15 @@
       box-shadow:0 1px 2px rgba(16,24,40,.04)}
     .sync-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e;
       box-shadow:0 0 0 3px rgba(34,197,94,.16);flex:0 0 auto}
+    .sync-chip.is-loading::before{background:#facc15;box-shadow:0 0 0 3px rgba(250,204,21,.35);
+      animation:syncBlink .38s linear infinite}
+    .sync-chip.is-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c;cursor:pointer}
+    .sync-chip.is-error::before{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.22)}
+    .sync-chip.is-ok::before{animation:softPulse 1.6s ease-out 1}
+    .error-banner{display:none;align-items:center;gap:12px;background:#fef2f2;border:1px solid #fecaca;
+      color:#991b1b;border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:.8rem;font-weight:600}
+    .error-banner .error-banner-msg{flex:1 1 auto;min-width:0}
+    .error-banner .btn{flex:0 0 auto}
     @media (max-width:575.98px){
       .dash-head{padding:12px 14px}
       .dash-title{font-size:1.02rem}
@@ -252,10 +262,6 @@
 </head>
 
 <body>
-<div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#2563eb;">
-  <div style="width:40px;height:40px;border:4px solid #e9eef6;border-top:4px solid #2563eb;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
-  <h6 id="loaderText">Loading enrollment data...</h6>
-</div>
 
 <div id="insightsModal" class="insight-modal-container">
   <div class="insight-content" id="captureArea">
@@ -375,6 +381,11 @@
       </div>
     </div>
   </header>
+
+  <div id="errorBanner" class="error-banner" role="alert">
+    <span id="errorBannerMsg" class="error-banner-msg"></span>
+    <button type="button" class="btn btn-sm btn-danger" onclick="retryLoad()">Retry</button>
+  </div>
 
   <div class="row g-2 mb-3 filter-row">
     <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
@@ -556,8 +567,133 @@ function deltaParts(d) {
   return d > 0 ? { icon: "↑", color: "#198754" } : d < 0 ? { icon: "↓", color: "#dc3545" } : { icon: "→", color: "#6c757d" };
 }
 
-function showLoader(txt) { if (txt) $("loaderText").innerText = txt; $("loader").style.display = "flex"; }
-function hideLoader() { $("loader").style.display = "none"; }
+function setSyncUI(state, text) {
+  const chip = $("reportTimestamp");
+  if (!chip) return;
+  chip.classList.remove("is-loading", "is-error", "is-ok");
+  chip.onclick = null;
+  if (state === "loading") chip.classList.add("is-loading");
+  else if (state === "error") { chip.classList.add("is-error"); chip.onclick = retryLoad; }
+  else if (state === "ok") chip.classList.add("is-ok");
+  if (text != null) chip.innerText = text;
+}
+function showErrorBanner(msg) {
+  const b = $("errorBanner"), t = $("errorBannerMsg");
+  if (t) t.innerText = msg || "Could not load enrollment data.";
+  if (b) b.style.display = "flex";
+}
+function hideErrorBanner() { const b = $("errorBanner"); if (b) b.style.display = "none"; }
+
+/* ------- Odometer-style KPI figures ------- */
+function kpiStyle(id) {
+  if (id.indexOf("ach") === 0) return { kind: "pct" };
+  if (id.indexOf("delta") === 0) return { kind: "delta" };
+  if (id.indexOf("bgap") === 0 || id.indexOf("tgap") === 0 || id.indexOf("targetNew") === 0) return { kind: "signed" };
+  return { kind: "num" };
+}
+function parseNum(text) {
+  const m = String(text).match(/[+-]?[\d,]+(?:\.\d+)?/g);
+  if (!m || !m.length) return 0;
+  return parseFloat(m[m.length - 1].replace(/,/g, "")) || 0;
+}
+function genSpinVal(id) {
+  if (id === "schools") return Math.round(30000 + Math.random() * 30000);
+  const st = kpiStyle(id);
+  if (st.kind === "pct") return 20 + Math.random() * 80;
+  if (st.kind === "delta") { const v = 500 + Math.random() * 120000; return Math.random() < 0.5 ? -v : v; }
+  if (st.kind === "signed") { const v = 5000 + Math.random() * 1200000; return Math.random() < 0.45 ? -v : v; }
+  if (id.indexOf("T") === id.length - 1) return 9000000 + Math.random() * 4000000;
+  return 2500000 + Math.random() * 5000000;
+}
+function fmtSpin(id, v) {
+  const st = kpiStyle(id);
+  if (st.kind === "pct") return Math.min(100, Math.max(0, v)).toFixed(1) + "%";
+  const r = Math.round(v);
+  if (st.kind === "delta") {
+    const icon = r > 0 ? "\u2191" : r < 0 ? "\u2193" : "\u2192";
+    return icon + Math.abs(r).toLocaleString();
+  }
+  if (st.kind === "signed") return (r > 0 ? "+" : "") + r.toLocaleString();
+  return Math.max(0, r).toLocaleString();
+}
+function kpiSpinEls() {
+  return Array.from(document.querySelectorAll(
+    ".kpi-row .kpi-group .counter, .kpi-row .kpi-group .counter-sm, .kpi-row .kpi-group .new-target-val"
+  )).filter((el) => el.id && el.id !== "currentOther");
+}
+let spinRAF = 0, spinning = false;
+function startSpin() {
+  if (spinning) return;
+  spinning = true;
+  const els = kpiSpinEls();
+  const step = () => {
+    if (!spinning) return;
+    els.forEach((el) => { el.innerText = fmtSpin(el.id, genSpinVal(el.id)); });
+    spinRAF = requestAnimationFrame(step);
+  };
+  spinRAF = requestAnimationFrame(step);
+}
+function stopSpin() {
+  spinning = false;
+  if (spinRAF) { cancelAnimationFrame(spinRAF); spinRAF = 0; }
+}
+
+let rollRAF = 0;
+const kpiPrev = new Map();
+function rollKPIValues() {
+  if (rollRAF) { cancelAnimationFrame(rollRAF); rollRAF = 0; }
+  const els = kpiSpinEls();
+  if (!els.length) return;
+  const t0 = performance.now();
+  const dur = 460;
+  const items = els.map((el) => {
+    const id = el.id;
+    const target = parseNum(el.innerText);
+    const from = kpiPrev.has(id) ? kpiPrev.get(id) : 0;
+    kpiPrev.set(id, target);
+    return { el, id, from, target, finalText: el.innerText };
+  });
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / dur);
+    items.forEach(({ el, id, from, target }) => {
+      const e = 1 - Math.pow(1 - t, 3);
+      const amp = Math.max(120, Math.abs(target - from) * 0.55 * (1 - t) + Math.abs(target) * 0.02 * (1 - t));
+      el.innerText = fmtSpin(id, from + (target - from) * e + (Math.random() - 0.5) * 2 * amp);
+    });
+    if (t < 1) rollRAF = requestAnimationFrame(step);
+    else {
+      items.forEach(({ el, finalText }) => { el.innerText = finalText; });
+      fitKPIValues();
+    }
+  };
+  rollRAF = requestAnimationFrame(step);
+}
+
+async function loadInitialData() {
+  hideErrorBanner();
+  setSyncUI("loading", "Syncing enrollment data\u2026");
+  startSpin();
+  try {
+    const { rows, meta, report } = await GradesLoader.loadGradesData();
+    MASTER_DATA = rows; META = meta;
+    hierarchy = buildHierarchy(rows);
+    setupDropdowns();
+    updateViewByDropdown();
+    const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
+    stopSpin();
+    setSyncUI("ok", `(Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools)`);
+    loadData();
+  } catch (e) {
+    console.error(e);
+    stopSpin();
+    setSyncUI("error", "Sync failed \u2014 click to retry");
+    showErrorBanner((e && e.message) ? e.message : "Could not load enrollment data.");
+  }
+}
+function retryLoad() { loadInitialData(); }
+window.onload = () => { loadInitialData(); };
+startSpin();
+setSyncUI("loading", "Syncing enrollment data\u2026");
 
 /* Size each KPI figure as large as possible while keeping its label readable.
    Base sizes apply when figures are short; long (9-10 digit) values shrink only
@@ -580,7 +716,7 @@ function fitKPIValues() {
     }
   });
 }
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitKPIValues());
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!spinning) fitKPIValues(); });
 
 function currentFilters() {
   return { d: $("district").value, w: $("wing").value, t: $("tehsil").value, m: $("markaz").value };
@@ -645,24 +781,7 @@ function buildHierarchy(data) {
   return h;
 }
 
-window.onload = async () => {
-  showLoader("Loading enrollment data...");
-  try {
-    const { rows, meta, report } = await GradesLoader.loadGradesData();
-    MASTER_DATA = rows; META = meta;
-    hierarchy = buildHierarchy(rows);
-    setupDropdowns();
-    updateViewByDropdown();
-    const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
-    $("reportTimestamp").innerText = `(Last sync: ${when} • ${report.rows.toLocaleString()} schools)`;
-    showLoader(`Processing ${report.rows.toLocaleString()} schools...`);
-    loadData();
-    hideLoader();
-  } catch (e) {
-    console.error(e);
-    showLoader("❌ " + e.message);
-  }
-};
+
 
 function setupDropdowns() {
   const distSelect = $("district");
@@ -731,7 +850,7 @@ function updateKPIs(stats, rows) {
   setTriple("tgap", stats.curM - stats.tarM, stats.curF - stats.tarF, stats.curT - stats.tarT, signed, gapColor);
   setTriple("ach", stats.achM, stats.achF, stats.achT, (v) => v.toFixed(1) + "%", achColor);
   setTriple("delta", stats.dM, stats.dF, stats.dT, (v) => { const p = deltaParts(v); return p.icon + signed(v); }, (v) => deltaParts(v).color);
-  fitKPIValues();
+  rollKPIValues();
 }
 
 /* ---------------- Chart ---------------- */
