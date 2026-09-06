@@ -130,7 +130,7 @@
     .kpi-row{align-items:stretch}
     .kpi-row>[class*="col-"]{display:flex;flex-direction:column}
     .kpi-group{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 12px 12px;
-      box-shadow:var(--shadow-card);flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;
+      box-shadow:var(--shadow-card);flex:1;display:flex;flex-direction:column;justify-content:flex-start;
       align-items:center;position:relative;overflow:hidden;
       transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
     .kpi-group::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;pointer-events:none;
@@ -140,25 +140,25 @@
       text-transform:uppercase;display:block}
     .kpi-group>.stat-label{display:block;text-align:center;font-size:.67rem;font-weight:800;
       color:var(--ink-2);letter-spacing:.1em;line-height:1.3;margin-bottom:2px;padding:0 6px;
-      text-transform:uppercase}
+      text-transform:uppercase;min-height:1.74rem}
     .counter{font-size:1.6rem;font-weight:800;line-height:1.05;margin-bottom:0;color:var(--ink)}
     .counter-sm{font-size:1.05rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
     .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
-    .kpi-hero{display:block;width:100%;text-align:center;font-size:2.05rem;font-weight:800;
-      letter-spacing:-.02em;line-height:1.08;overflow:hidden;margin:4px 0 0}
+    .kpi-hero{display:flex;align-items:center;justify-content:center;width:100%;text-align:center;
+      font-size:2.05rem;font-weight:800;letter-spacing:-.02em;line-height:1.08;overflow:hidden;
+      margin:2px 0 0;min-height:38px}
     .kpi-sub{display:flex;width:100%;border-top:1px solid var(--line-soft);
       margin-top:10px;padding-top:8px}
     .kpi-sub-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 3px}
     .kpi-sub-item+.kpi-sub-item{border-left:1px solid var(--line-soft)}
     .kpi-sub-item>.stat-label{font-size:.55rem;letter-spacing:.09em;margin:0;text-transform:uppercase}
-    .kpi-target-note{display:flex;align-items:baseline;justify-content:center;gap:7px;margin-top:10px;
-      padding-top:8px;border-top:1px dashed var(--line)}
-    .kpi-target-note .lbl{font-size:.58rem;font-weight:700;letter-spacing:.09em;color:var(--muted);text-transform:uppercase}
-    .kpi-target-note .val{font-size:1.1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em}
+    .kpi-foot{display:flex;align-items:center;justify-content:center;min-height:22px;margin-top:2px}
+    .new-target-val{font-size:.84rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;white-space:nowrap;line-height:1.15}
+    .kpi-sub-item .new-target-val{font-size:.66rem;font-weight:700;color:#475569}
     .kpi-sub-note{display:block;text-align:center;font-size:.7rem;font-weight:600;color:var(--muted);margin-top:6px}
     .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
       background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
-      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:7px auto 0}
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0}
     .other-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:#f59e0b;flex:0 0 auto}
     .hidden{display:none !important}
 
@@ -226,25 +226,26 @@
       .kpi-row-1>.col-4:last-child{width:100%}
       .kpi-group .stat-label{font-size:.56rem}
       .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .counter-t{white-space:nowrap}
-      .kpi-hero{font-size:clamp(1.15rem,5.2vw,1.75rem)}
+      .kpi-hero{font-size:clamp(1.15rem,5.2vw,1.75rem);min-height:30px}
       .kpi-sub{margin-top:8px;padding-top:7px}
       .kpi-sub-item>.stat-label{font-size:.5rem}
       .kpi-sub-item .counter-sm{font-size:clamp(.8rem,3.9vw,1rem)}
-      .kpi-target-note{margin-top:8px;padding-top:7px}
-      .kpi-target-note .val{font-size:.95rem}
+      .kpi-foot{min-height:19px}
+      .new-target-val{font-size:.8rem}
+      .kpi-sub-item .new-target-val{font-size:.62rem}
       .filter-row{--bs-gutter-x:.25rem}
       .filter-row .form-select{font-size:.68rem;padding-left:9px}
       .filter-row .btn{padding:6px 10px;font-size:.68rem}
       .filter-row .btn-group{flex-wrap:wrap}
       .filter-row .btn-group .btn{flex:1 1 auto}
-      .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px}
+      .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px;min-height:1.46rem;line-height:1.25}
     }
     @media (max-width:380px){
       .kpi-group{padding-left:5px;padding-right:5px}
       .kpi-group .stat-label{font-size:.52rem;letter-spacing:-.15px}
-      .kpi-hero{font-size:clamp(1.05rem,4.8vw,1.5rem)}
+      .kpi-hero{font-size:clamp(1.05rem,4.8vw,1.5rem);min-height:26px}
       .kpi-sub-item .counter-sm{font-size:.78rem}
-      .kpi-target-note .val{font-size:.88rem}
+      .kpi-sub-item .new-target-val{font-size:.58rem}
     }
 
   </style>
@@ -405,13 +406,13 @@
     <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
-  <!-- KPI Row 1: Current | Baseline | Targeted Enrollment (hero total + M/F) -->
+  <!-- KPI Row 1: Current | Baseline | Targeted Enrollment (hero total + M/F + new-target deltas) -->
   <div class="row g-3 mb-3 kpi-row kpi-row-1">
     <div class="col-4">
       <div class="kpi-group text-center">
         <span class="stat-label">Current Enrollment</span>
         <p id="currentT" class="counter kpi-hero">0</p>
-        <span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span>
+        <div class="kpi-foot"><span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span></div>
         <div class="kpi-sub">
           <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="currentM" class="counter-sm">0</span></div>
           <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="currentF" class="counter-sm">0</span></div>
@@ -422,6 +423,7 @@
       <div class="kpi-group text-center">
         <span class="stat-label">Baseline</span>
         <p id="totalBaselineT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot" aria-hidden="true"></div>
         <div class="kpi-sub">
           <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="totalBaselineM" class="counter-sm">0</span></div>
           <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="totalBaselineF" class="counter-sm">0</span></div>
@@ -432,11 +434,11 @@
       <div class="kpi-group text-center">
         <span class="stat-label">Targeted Enrollment</span>
         <p id="targetT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot"><b id="targetNewTotal" class="new-target-val">+0</b></div>
         <div class="kpi-sub">
-          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="targetM" class="counter-sm">0</span></div>
-          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="targetF" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="targetM" class="counter-sm">0</span><span id="targetNewM" class="new-target-val">+0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="targetF" class="counter-sm">0</span><span id="targetNewF" class="new-target-val">+0</span></div>
         </div>
-        <div class="kpi-target-note"><span class="lbl">New target</span><b class="val" id="targetNewTotal">+0</b><span class="lbl">over baseline</span></div>
       </div>
     </div>
   </div>
@@ -561,7 +563,7 @@ function hideLoader() { $("loader").style.display = "none"; }
    Base sizes apply when figures are short; long (9-10 digit) values shrink only
    as needed. Visual-only. */
 function fitKPIValues() {
-  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .kpi-target-note .val").forEach((el) => {
+  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .new-target-val").forEach((el) => {
     el.style.fontSize = "";
     const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
     if (!host || host.clientWidth <= 0) return;
@@ -718,6 +720,11 @@ function updateKPIs(stats, rows) {
   setTriple("totalBaseline", stats.basM, stats.basF, stats.basT, fmt);
   setTriple("target", stats.tarM, stats.tarF, stats.tarT, fmt);
   $("targetNewTotal").innerText = signed(stats.ntT);
+  $("targetNewTotal").style.color = gapColor(stats.ntT);
+  $("targetNewM").innerText = signed(stats.ntM);
+  $("targetNewM").style.color = gapColor(stats.ntM);
+  $("targetNewF").innerText = signed(stats.ntF);
+  $("targetNewF").style.color = gapColor(stats.ntF);
   $("schools").innerText = fmt(stats.n);
   $("schoolsBB").innerText = fmt(rows.filter((r) => r.curT < r.basT).length) + " below baseline";
   setTriple("bgap", stats.curM - stats.basM, stats.curF - stats.basF, stats.curT - stats.basT, signed, gapColor);
