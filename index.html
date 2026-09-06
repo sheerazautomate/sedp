@@ -141,13 +141,14 @@
       letter-spacing:.1em;line-height:1.3;margin-bottom:5px;padding:0 4px}
     .kpi-group>.stat-label::before{content:"";display:block;width:22px;height:3px;border-radius:2px;
       margin:0 auto 5px;background:linear-gradient(90deg,#2563eb,#db2777)}
-    .counter{font-size:1.34rem;font-weight:800;line-height:1.1;margin-bottom:0;color:var(--ink)}
-    .counter-sm{font-size:.98rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
-    .counter-t{font-size:1.18rem;font-weight:800;letter-spacing:-.01em}
+    .counter{font-size:1.5rem;font-weight:800;line-height:1.1;margin-bottom:0;color:var(--ink)}
+    .counter-sm{font-size:1.12rem;font-weight:800;line-height:1.15;margin-bottom:0;color:#1f2937}
+    .counter-t{font-size:1.4rem;font-weight:800;letter-spacing:-.02em;color:#0f172a}
     .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
-    .kpi-group .d-flex.justify-content-around{width:100%;align-items:end}
-    .kpi-group .d-flex.justify-content-around>div{min-width:0;flex:1 1 0}
-    .kpi-group .d-flex.justify-content-around>div+div{border-left:1px solid var(--line-soft)}
+    .kpi-group .d-flex.justify-content-around{display:flex;width:100%;align-items:stretch;justify-content:center}
+    .kpi-group .d-flex.justify-content-around>div{min-width:0;flex:0 1 auto;padding:0 5px;
+      display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+    .kpi-group .d-flex.justify-content-around>div+div{border-left:1px solid var(--line-soft);padding-left:7px}
     .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
       background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
       white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0 auto 2px}
@@ -221,8 +222,9 @@
       .kpi-group .d-flex.justify-content-around>div:nth-child(3){grid-column:1/-1;
         border-top:1px solid var(--line-soft);padding-top:5px;margin-top:1px}
       .kpi-group .stat-label{font-size:.56rem;white-space:nowrap}
-      .kpi-group .counter-sm,.kpi-group .counter-t{font-size:clamp(.74rem,3.8vw,1rem);line-height:1.15;white-space:nowrap}
-      .kpi-group .d-flex.justify-content-around>div:nth-child(3) .counter-t{font-size:clamp(.9rem,4.6vw,1.16rem)}
+      .kpi-group .counter-sm{font-size:clamp(.82rem,4.4vw,1.18rem);line-height:1.15;white-space:nowrap}
+      .kpi-group .counter-t{font-size:clamp(.9rem,4.6vw,1.3rem);line-height:1.15;white-space:nowrap}
+      .kpi-group .d-flex.justify-content-around>div:nth-child(3) .counter-t{font-size:clamp(1.05rem,5.2vw,1.5rem)}
       .filter-row{--bs-gutter-x:.25rem}
       .filter-row .form-select{font-size:.68rem;padding-left:9px}
       .filter-row .btn{padding:6px 10px;font-size:.68rem}
@@ -233,7 +235,7 @@
     @media (max-width:380px){
       .kpi-group{padding-left:5px;padding-right:5px}
       .kpi-group .stat-label{font-size:.52rem;letter-spacing:-.15px}
-      .kpi-group .counter-sm{font-size:.68rem}
+      .kpi-group .counter-sm{font-size:.76rem}
     }
 
   </style>
@@ -476,29 +478,52 @@ function deltaParts(d) {
 function showLoader(txt) { if (txt) $("loaderText").innerText = txt; $("loader").style.display = "flex"; }
 function hideLoader() { $("loader").style.display = "none"; }
 
-/* Scale each KPI figure down (never up) until it fits its own cell, so long
-   9-10 digit totals never overflow or collide on any screen width. Visual-only. */
+/* Size each KPI figure as large as possible while keeping its label readable.
+   Base sizes apply when figures are short; long (9-10 digit) values shrink only
+   as needed. Visual-only. */
 function fitKPIValues() {
-  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .counter-t").forEach((el) => {
-    el.style.fontSize = "";
-    const cell = el.parentElement;
-    if (!cell || cell.clientWidth <= 0) return;
-    const avail = cell.clientWidth - 1;
-    let fs = parseFloat(getComputedStyle(el).fontSize) || 16;
-    const floor = Math.min(fs, 7);
-    el.style.fontSize = fs + "px";
-    let guard = 0;
-    while (guard++ < 80 && el.scrollWidth > avail && fs > floor) {
-      fs = Math.max(floor, fs - 0.25);
-      el.style.fontSize = fs + "px";
+  /* Give the widest figure in each card the room it needs at a comfortable font
+     size, then shrink only if it would touch the neighbouring label. */
+  document.querySelectorAll(".kpi-group").forEach((card) => {
+    const row = card.querySelector(".d-flex.justify-content-around");
+    const cells = row ? Array.from(row.children).filter((c) => c.clientWidth > 0) : [];
+    if (!cells.length) return;
+
+    const items = cells.map((cell) => {
+      const val = cell.querySelector(".counter, .counter-sm, .counter-t");
+      const lbl = cell.querySelector(":scope > .stat-label");
+      val.style.fontSize = "";
+      const base = parseFloat(getComputedStyle(val).fontSize) || 18;
+      const labelW = lbl ? lbl.scrollWidth : 0;
+      const avail = Math.max(0, cell.clientWidth - 2);
+      let fs = base;
+      let guard = 0;
+      while (guard++ < 60 && val.scrollWidth > avail && fs > 9) {
+        fs = Math.max(9, fs - 0.5);
+        val.style.fontSize = fs + "px";
+      }
+      return { cell, val, base, labelW, avail, fs };
+    });
+
+    /* The tightest cell decides; never let a neighbour crowd a label. */
+    const minFs = Math.min(...items.map((it) => it.fs));
+    const maxNeed = Math.max(...items.map((it) => it.val.scrollWidth - it.avail));
+    let fs = items[0].base;
+    if (maxNeed > 0) {
+      const tight = items.reduce((a, b) => (b.val.scrollWidth - b.avail > a ? b : a), items[0]);
+      fs = Math.max(9, tight.base * (tight.avail / tight.val.scrollWidth));
+      fs = Math.min(items[0].base, fs);
+    } else {
+      fs = items[0].base;
     }
+    items.forEach((it) => {
+      it.val.style.fontSize = "";
+      const natural = parseFloat(getComputedStyle(it.val).fontSize) || it.base;
+      const use = Math.max(9, Math.min(it.base, fs));
+      if (use < natural) it.val.style.fontSize = use + "px";
+    });
   });
 }
-let __kpiFitTimer = null;
-window.addEventListener("resize", () => {
-  if (__kpiFitTimer) clearTimeout(__kpiFitTimer);
-  __kpiFitTimer = setTimeout(fitKPIValues, 120);
-});
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitKPIValues());
 
 function currentFilters() {
