@@ -5,9 +5,9 @@ live login**. All files here except this README are written by automation.
 
 | File | Writer | Purpose |
 |---|---|---|
-| `enrollment.csv` | `fetch-enrollment.yml` (daily) | Raw Grades `districts-enrollment` export. Latest snapshot. |
-| `enrollment_prev.csv` | `fetch-enrollment.yml` (daily) | Yesterday's snapshot. Matched by EMIS for day-over-day Δ. |
-| `meta.json` | `fetch-enrollment.yml` (daily) | `{fetched_at_utc, fetched_at_pkt, rows, bytes, source}` for the "last sync" label. |
+| `enrollment.csv` | `fetch-enrollment.yml` (2-hourly) | Raw Grades `districts-enrollment` export. Latest (current) snapshot. |
+| `enrollment_prev.csv` | `fetch-enrollment.yml` (first run of each PKT day) | **Midnight reference** snapshot for the current PKT day. Pinned on the day's first successful run and left untouched by the rest of that day's syncs. Matched by EMIS for the day-change Δ. |
+| `meta.json` | `fetch-enrollment.yml` (each run) | `{fetched_at_utc, fetched_at_pkt, ref_date_pkt, sync_type, rows, bytes, source}` for the "last sync" label. `sync_type` is `reference` on the day's first run, `sync` afterwards. |
 | `emis_wing.json` | `wing-map-once.yml` (**once**) | Static `{EMIS: Wing}` lookup restoring the Wing dimension the Grades export lacks. |
 
 Do not hand-edit these files — the next worker run overwrites them (except

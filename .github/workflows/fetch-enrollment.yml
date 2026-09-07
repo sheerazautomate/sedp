@@ -1,8 +1,18 @@
 name: Fetch Grades enrollment
 
-# Daily download of the Grades districts-enrollment export.
-# Commits data/enrollment.csv (+ yesterday's copy + meta.json) so the
-# GitHub Pages dashboard reads fresh data with no live login.
+# Refreshes the Grades districts-enrollment export every 2 hours (PKT).
+#
+# The FIRST successful run of each PKT day is the "reference" run: it pins
+# that snapshot to data/enrollment_prev.csv so the dashboard compares the
+# whole day's current numbers against the midnight snapshot. Later runs that
+# day only refresh data/enrollment.csv. The reference decision is made by the
+# PKT date in data/meta.json (not the wall clock), so it still lands even when
+# GitHub delays a scheduled run past midnight.
+#
+# NOTE: GitHub Actions schedules can arrive minutes-to-hours late (observed
+# +2..+4h on this repo). The 2-hourly cadence plus date-rollover detection
+# makes that harmless; for strictly-punctual runs use an external scheduler
+# that hits the workflow_dispatch endpoint.
 #
 # REQUIRED REPO SECRETS (Settings -> Secrets and variables -> Actions):
 #   GRADES_EMAIL     login email for grades.pesrp.edu.pk
@@ -13,14 +23,17 @@ name: Fetch Grades enrollment
 
 on:
   schedule:
-    - cron: "0 1 * * *"    # 06:00 PKT (01:00 UTC)
-    - cron: "0 7 * * *"    # 12:00 PKT (07:00 UTC)
-    - cron: "0 13 * * *"   # 18:00 PKT (13:00 UTC)
-    - cron: "59 18 * * *"  # 23:59 PKT (18:59 UTC)
+    # Every 2 hours PKT, aligned so the 19:05 UTC slot = 00:05 PKT (the
+    # midnight reference run). Hours are UTC: 01,03,..,23 == PKT 06,08,..,22 + 00:05
+    - cron: "5 1,3,5,7,9,11,13,15,17,19,21,23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
         description: "Test login + export without committing (true/false)"
+        required: false
+        default: "false"
+      force_reference:
+        description: "Pin this run as the day's reference snapshot (true/false)"
         required: false
         default: "false"
 
@@ -50,6 +63,7 @@ jobs:
           GRADES_EMAIL: ${{ secrets.GRADES_EMAIL }}
           GRADES_PASSWORD: ${{ secrets.GRADES_PASSWORD }}
           DRY_RUN: ${{ inputs.dry_run }}
+          FORCE_REFERENCE: ${{ inputs.force_reference }}
         run: |
           if [ "$DRY_RUN" = "true" ]; then
             python scripts/fetch_grades.py --dry-run
@@ -62,10 +76,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          SYNC_TYPE=$(python3 -c "import json;print(json.load(open('data/meta.json')).get('sync_type','sync'))" 2>/dev/null || echo sync)
           git add -A data/
           if git diff --cached --quiet; then
             echo "No data changes."
           else
-            git commit -m "Update enrollment data ($(date -u +%F))"
+            git commit -m "Enrollment ${SYNC_TYPE} update ($(date -u +%F) $(date -u +%H:%M)Z)"
             git push
           fi
