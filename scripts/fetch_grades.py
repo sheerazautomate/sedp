@@ -2,9 +2,17 @@
 """
 Grades enrollment fetcher (runs in GitHub Actions, which has internet access).
 
-Logs into the Grades portal, downloads the districts-enrollment CSV export,
-rotates yesterday's file to data/enrollment_prev.csv (used for day-over-day
-delta in the dashboard), and writes data/meta.json for the "last sync" label.
+Logs into the Grades portal and downloads the districts-enrollment CSV export
+into data/enrollment.csv (kept fresh by 2-hourly syncs).
+
+Reference (start-of-day) snapshot: the FIRST successful run of each PKT day
+pins its freshly downloaded snapshot to data/enrollment_prev.csv and records
+ref_date_pkt in data/meta.json. Every later run that day only refreshes
+data/enrollment.csv and leaves the reference untouched, so the dashboard's
+"Day change" compares current enrollment against that day's midnight snapshot
+(the previous enrollment reference) for the whole day.
+
+Required env vars (set as GitHub Actions secrets -- NEVER commit values):
 
 Required env vars (set as GitHub Actions secrets -- NEVER commit values):
   GRADES_EMAIL       portal login email
@@ -20,6 +28,9 @@ Optional env vars:
   DATA_DIR             default "data"       (relative to repo root)
   MIN_BYTES            default "50000"      (sanity floor: a full-province
                                             export must be bigger than this)
+  FORCE_REFERENCE      default ""           ("true" -> pin this run as the day's
+                                            reference even mid-day, e.g. if the
+                                            first run of the day failed)
 
 Usage:
   python scripts/fetch_grades.py            # fetch + rotate + write files
@@ -211,23 +222,46 @@ def main():
     cur_path = DATA_DIR / "enrollment.csv"
     prev_path = DATA_DIR / "enrollment_prev.csv"
 
-    if cur_path.exists():
-        prev_path.write_bytes(cur_path.read_bytes())
-        log(f"Rotated {cur_path} -> {prev_path}")
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    pkt = now_utc + dt.timedelta(hours=5)
+    today_pkt = pkt.strftime("%Y-%m-%d")
+
+    # First successful run of a new PKT day becomes the midnight reference for
+    # that whole day. We key off the PKT date in meta.json (not the wall clock)
+    # so the snapshot is still taken even when GitHub Actions delays the
+    # scheduled run by minutes or hours past 00:00.
+    last_ref = None
+    meta_path = DATA_DIR / "meta.json"
+    if meta_path.exists():
+        try:
+            last_ref = json.loads(meta_path.read_text()).get("ref_date_pkt")
+        except Exception:
+            last_ref = None
+    is_reference = last_ref != today_pkt
+    force_ref = os.environ.get("FORCE_REFERENCE", "").strip().lower() in (
+        "1", "true", "yes")
+    if force_ref:
+        is_reference = True
+
+    if is_reference:
+        prev_path.write_bytes(body)
+        log(f"REFERENCE run: pinned this snapshot to {prev_path} for {today_pkt}")
+    else:
+        log(f"SYNC run: refreshing {cur_path}; reference {prev_path} left untouched")
     cur_path.write_bytes(body)
     log(f"Wrote {cur_path} ({len(body)} bytes)")
 
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    pkt = now_utc + dt.timedelta(hours=5)
     meta = {
         "fetched_at_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "fetched_at_pkt": pkt.strftime("%Y-%m-%d %I:%M %p PKT"),
+        "ref_date_pkt": today_pkt,
+        "sync_type": "reference" if is_reference else "sync",
         "rows": rows,
         "bytes": len(body),
         "source": "grades.pesrp.edu.pk districts-enrollment export",
     }
-    (DATA_DIR / "meta.json").write_text(json.dumps(meta, indent=2))
-    log(f"Wrote meta.json {meta['fetched_at_pkt']}")
+    meta_path.write_text(json.dumps(meta, indent=2))
+    log(f"Wrote meta.json {meta['fetched_at_pkt']} ({meta['sync_type']})")
     return 0
 
 

@@ -5,7 +5,8 @@
  * daily by the GitHub Actions worker (`scripts/fetch_grades.py`):
  *
  *   data/enrollment.csv       latest snapshot (REQUIRED)
- *   data/enrollment_prev.csv  yesterday's snapshot (optional; for day Δ)
+ *   data/enrollment_prev.csv  the current PKT day's midnight reference
+ *                            snapshot (optional; for day-change Δ)
  *   data/emis_wing.json       one-time {EMIS: Wing} lookup (optional)
  *   data/meta.json            {fetched_at_pkt, rows, ...} (optional)
  *
@@ -245,7 +246,8 @@ async function loadGradesData() {
     fetchText(GRADES_PATHS.meta, false),
   ]);
 
-  /* Yesterday's currents by EMIS (same export layout). */
+  /* The day's midnight reference snapshot, keyed by EMIS (same layout as
+     current). Syncs through the day leave it pinned so Δ = since midnight. */
   let prevMap = {};
   if (prevText) {
     try {
