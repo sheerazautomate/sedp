@@ -229,6 +229,14 @@
     .insight-content .text-warning{color:#b45309 !important}
     #ins-narrative-box{box-shadow:0 1px 2px rgba(16,24,40,.04)}
 
+    @media (max-width:767.98px){
+      /* Tablet / small screens: keep the action buttons off the dropdown line */
+      .filter-row-main>.col{flex:0 0 auto;width:25%}
+      .filter-row-main>.col-auto{flex:0 0 auto;width:100%}
+      .filter-row-main>.col-auto .btn-group{display:flex;width:100%;flex-wrap:nowrap}
+      .filter-row-main>.col-auto .btn-group .btn{flex:1 1 0;min-width:0}
+    }
+
     @media (max-width:575.98px){
       .container{padding-left:8px;padding-right:8px}
       .kpi-group{padding:16px 8px 12px;min-height:92px}
@@ -246,10 +254,20 @@
       .new-target-val{font-size:.8rem}
       .kpi-sub-item .new-target-val{font-size:.62rem}
       .filter-row{--bs-gutter-x:.25rem}
-      .filter-row .form-select{font-size:.68rem;padding-left:9px}
-      .filter-row .btn{padding:6px 10px;font-size:.68rem}
-      .filter-row .btn-group{flex-wrap:wrap}
-      .filter-row .btn-group .btn{flex:1 1 auto}
+      .filter-row .form-select{font-size:.68rem !important;padding-left:9px}
+      .filter-row .btn{padding:6px 10px;font-size:.68rem !important}
+
+      /* Primary filter bar: 2x2 grid of dropdowns, action buttons on their own full-width row */
+      .filter-row-main>.col{flex:0 0 auto;width:50%}
+      .filter-row-main>.col-auto{flex:0 0 auto;width:100%}
+      .filter-row-main>.col-auto .btn-group{display:flex;width:100%;flex-wrap:nowrap}
+      .filter-row-main>.col-auto .btn-group .btn{flex:1 1 0;min-width:0;padding:7px 6px;white-space:nowrap}
+
+      /* Secondary filter bar: each dropdown keeps its action button on the same line */
+      .filter-row-sub>.col{flex:0 0 auto;width:72%}
+      .filter-row-sub>.col-auto{flex:0 0 auto;width:28%}
+      .filter-row-sub>.col-auto .btn{width:100%;padding:6px 6px !important}
+      .filter-row-sub .filter-divider{border-left:0 !important;padding-left:calc(var(--bs-gutter-x)*.5)}
       .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px;min-height:1.46rem;line-height:1.25}
     }
     @media (max-width:380px){
@@ -389,7 +407,7 @@
     <button type="button" class="btn btn-sm btn-danger" onclick="retryLoad()">Retry</button>
   </div>
 
-  <div class="row g-2 mb-3 filter-row">
+  <div class="row g-2 mb-3 filter-row filter-row-main">
     <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
     <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
     <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
@@ -403,7 +421,7 @@
     </div>
   </div>
 
-  <div class="row g-2 mb-3 filter-row">
+  <div class="row g-2 mb-3 filter-row filter-row-sub">
     <div class="col"><select id="viewBySelect" class="form-select" style="font-size:0.75rem;"><option value="">View by...</option></select></div>
     <div class="col-auto"><button class="btn btn-success btn-sm fw-bold" style="font-size:0.75rem;padding:6px 12px;" onclick="openBreakdownModal()">Update</button></div>
     <div class="col filter-divider">
