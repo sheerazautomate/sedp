@@ -60,10 +60,9 @@
       padding:16px 18px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:var(--radius);
       box-shadow:var(--shadow-card);margin-bottom:14px;position:relative;overflow:hidden}
     .dash-head-main{display:flex;align-items:center;gap:13px;min-width:0}
-    .dash-emblem{flex:0 0 auto;width:44px;height:44px;border-radius:13px;
-      background:linear-gradient(150deg,#1e40af,#2563eb 60%,#3b82f6);color:#fff;
-      display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;
-      letter-spacing:.06em;box-shadow:0 8px 18px -6px rgba(37,99,235,.65)}
+    .dash-emblem{flex:0 0 auto;width:46px;height:46px;border-radius:50%;
+      object-fit:contain;display:block;background:transparent;
+      box-shadow:0 8px 18px -6px rgba(37,99,235,.45)}
     .dash-kicker{font-size:.6rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:var(--muted)}
     .dash-title{font-size:1.22rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:1px 0 0;line-height:1.2}
     .dash-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
@@ -395,7 +394,7 @@
 <div class="container py-3">
   <header class="dash-head">
     <div class="dash-head-main">
-      <div class="dash-emblem" aria-hidden="true">SED</div>
+      <img class="dash-emblem" src="sedp.jpeg" alt="SEDP logo" width="46" height="46">
       <div>
         <div class="dash-kicker">School Education Department &middot; Punjab</div>
         <h1 class="dash-title">Enrollment Monitoring Dashboard</h1>
