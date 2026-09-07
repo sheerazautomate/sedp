@@ -2,6 +2,9 @@
 <html>
 <head>
   <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/png" href="favicon.png">
    <!-- Open Graph Meta Tags (WhatsApp, Facebook, LinkedIn) -->
@@ -18,7 +21,7 @@
 
   <!-- General Meta Tags -->
   <meta name="description" content="Comprehensive enrollment monitoring dashboard for Punjab schools with real-time analytics and insights.">
-  <meta name="theme-color" content="#0d6efd">
+  <meta name="theme-color" content="#2563eb">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -26,92 +29,241 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="fetch-data.js"></script>
   <style>
-    @keyframes spin{100%{transform:rotate(360deg)}}
-    body { background-color: #f4f7f6; font-family: system-ui, -apple-system, sans-serif; }
-    .chart-wrapper { width: 100%; overflow-y: auto; background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-top: 15px; }
-    #chartParent { position: relative; width: 100%; min-height: 500px; }
-    .kpi-group { background: #ffffff; border-radius: 12px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 10px; }
-    .stat-label { font-size: 0.6rem; text-transform: uppercase; color: #6c757d; font-weight: 700; display: block; }
-    .counter { font-size: 1.3rem; font-weight: 700; line-height: 1; margin-bottom: 0; }
-    .counter-sm { font-size: 0.95rem; font-weight: 700; line-height: 1.1; margin-bottom: 0; }
-    .counter-t { font-size: 1.15rem; font-weight: 800; }
-    .filter-row .form-select, .filter-row .btn { font-size: 0.75rem; padding: 6px 4px; }
 
-    .table-responsive { font-size: 0.75rem; background: white; border-radius: 8px; max-height: none !important; overflow-x: auto !important; overflow-y: visible; }
-    .table-responsive thead th { top: 0; background-color: #fff; z-index: 10; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-    #tableView td, #tableView th, #breakdownTableWrapper td, #breakdownTableWrapper th { white-space: nowrap; }
+    :root{
+      --ink:#0f172a; --ink-2:#334155; --muted:#64748b;
+      --line:#e6eaf2; --line-soft:#eef1f7;
+      --male:#2563eb; --female:#db2777;
+      --shadow-card:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);
+      --shadow-hover:0 10px 26px -10px rgba(16,24,40,.16);
+      --radius:16px; --radius-sm:10px;
+      --bs-primary:#2563eb; --bs-primary-rgb:37,99,235;
+    }
+    @keyframes syncBlink{0%,100%{opacity:1}50%{opacity:.12}}
+    @keyframes softPulse{0%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}}
+    body{
+      background:
+        radial-gradient(1100px 480px at 12% -8%, rgba(37,99,235,.07), transparent 60%),
+        radial-gradient(900px 460px at 105% -5%, rgba(219,39,119,.05), transparent 55%),
+        #f4f6fb;
+      background-attachment: fixed;
+      font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--ink); font-variant-numeric:tabular-nums;
+      -webkit-font-smoothing:antialiased;
+    }
+    ::selection{background:rgba(37,99,235,.16)}
+    .text-primary{color:var(--male) !important}
+    .text-info{color:#0e7490 !important}
 
-    .hidden { display: none; }
-    .border-end-custom { border-right: 1px solid #eee; }
-
-    /* INSIGHT MODAL */
-    .insight-modal-container { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.75); z-index:3000; display:none; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(6px); }
-    .insight-content { background:#fbfbfb; width:100%; max-width:960px; max-height:95vh; overflow-y:auto; border-radius:24px; position:relative; padding:30px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5); border:1px solid #e2e8f0; }
-    .section-header { font-size:0.75rem; color:#1e293b; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:15px; border-bottom:2px solid #e2e8f0; padding-bottom:8px; }
-    .info-card-nb { background:white; border:1px solid #e2e8f0; padding:20px; border-radius:16px; height:100%; }
-    .accent-blue { border-left:6px solid #2563eb; }
-    .accent-purple { border-left:6px solid #7c3aed; }
-    .accent-orange { border-top:6px solid #ea580c; }
-    .accent-green { border-left:6px solid #16a34a; }
-    .accent-red { border-left:6px solid #dc2626; }
-    .no-print { visibility:visible; }
-    .ach-bar-wrap { background:#e2e8f0; border-radius:999px; height:10px; margin-top:6px; overflow:hidden; }
-    .ach-bar-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
-    .scope-breadcrumb { font-size:0.7rem; color:#64748b; margin-top:4px; letter-spacing:0.3px; }
-    .scope-breadcrumb span { color:#1e40af; font-weight:700; }
-    .insight-mini-table { font-size:0.72rem; width:100%; border-collapse:collapse; }
-    .insight-mini-table th { background:#f1f5f9; padding:5px 8px; text-align:left; font-weight:700; color:#374151; white-space:nowrap; }
-    .insight-mini-table td { padding:5px 8px; border-bottom:1px solid #f1f5f9; white-space:nowrap; }
-    .rank-badge { display:inline-block; width:20px; height:20px; border-radius:50%; font-size:0.6rem; font-weight:700; text-align:center; line-height:20px; }
-
-    /* Keep KPI cards readable on narrow screens. The gender figures stay side by
-       side while Total gets its own centred row, preventing long values from
-       colliding or wrapping into neighbouring cards. */
-    @media (max-width: 575.98px) {
-      .container { padding-left: 8px; padding-right: 8px; }
-      .kpi-group { padding: 10px 8px; min-height: 88px; }
-      /* Two cards per line gives each card enough room for full labels and values. */
-      .kpi-row-1 > .col-3,
-      .kpi-row-3 > .col-6 { width: 50%; }
-      /* The three-card row uses a full-width Schools card, then two equal gap cards. */
-      .kpi-row-2 > .col-4 { width: 50%; }
-      .kpi-row-2 > .col-4:first-child { width: 100%; }
-      .kpi-group .d-flex.justify-content-around {
-        display: grid !important;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 4px 8px;
-        align-items: end;
-      }
-      .kpi-group .d-flex.justify-content-around > div { min-width: 0; }
-      .kpi-group .d-flex.justify-content-around > div:nth-child(3) {
-        grid-column: 1 / -1;
-        border-top: 1px solid #edf0f3;
-        padding-top: 4px;
-        margin-top: 1px;
-      }
-      .kpi-group .stat-label { font-size: .58rem; white-space: nowrap; }
-      .kpi-group .counter-sm,
-      .kpi-group .counter-t { font-size: clamp(.72rem, 3.8vw, 1rem); line-height: 1.15; overflow-wrap: normal; white-space: nowrap; }
-      .kpi-group .d-flex.justify-content-around > div:nth-child(3) .counter-t { font-size: clamp(.85rem, 4.5vw, 1.1rem); }
-      .filter-row { --bs-gutter-x: .25rem; }
-      .filter-row .btn-group { flex-wrap: wrap; }
-      .filter-row .btn-group .btn { flex: 1 1 auto; }
+    /* ---------- Masthead ---------- */
+    .dash-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+      padding:16px 18px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow-card);margin-bottom:14px;position:relative;overflow:hidden}
+    .dash-head-main{display:flex;align-items:center;gap:13px;min-width:0}
+    .dash-emblem{flex:0 0 auto;width:44px;height:44px;border-radius:13px;
+      background:linear-gradient(150deg,#1e40af,#2563eb 60%,#3b82f6);color:#fff;
+      display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;
+      letter-spacing:.06em;box-shadow:0 8px 18px -6px rgba(37,99,235,.65)}
+    .dash-kicker{font-size:.6rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:var(--muted)}
+    .dash-title{font-size:1.22rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:1px 0 0;line-height:1.2}
+    .dash-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .dash-credit{font-size:.62rem;color:#94a3b8;font-weight:600;text-align:right;margin-top:4px;letter-spacing:.02em}
+    .sync-chip{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:600;color:var(--ink-2);
+      background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;
+      box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .sync-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e;
+      box-shadow:0 0 0 3px rgba(34,197,94,.16);flex:0 0 auto}
+    .sync-chip.is-loading::before{background:#facc15;box-shadow:0 0 0 3px rgba(250,204,21,.35);
+      animation:syncBlink .38s linear infinite}
+    .sync-chip.is-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c;cursor:pointer}
+    .sync-chip.is-error::before{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.22)}
+    .sync-chip.is-ok::before{animation:softPulse 1.6s ease-out 1}
+    .error-banner{display:none;align-items:center;gap:12px;background:#fef2f2;border:1px solid #fecaca;
+      color:#991b1b;border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:.8rem;font-weight:600}
+    .error-banner .error-banner-msg{flex:1 1 auto;min-width:0}
+    .error-banner .btn{flex:0 0 auto}
+    @media (max-width:575.98px){
+      .dash-head{padding:12px 14px}
+      .dash-title{font-size:1.02rem}
+      .dash-credit{text-align:left}
     }
 
-    @media (max-width: 380px) {
-      .kpi-group { padding-left: 5px; padding-right: 5px; }
-      .kpi-group .stat-label { font-size: .52rem; letter-spacing: -.15px; }
-      .kpi-group .counter-sm { font-size: .68rem; }
+    /* ---------- Filter bar ---------- */
+    .filter-row{align-items:center}
+    .filter-row .form-select,.filter-row .btn{font-size:.72rem}
+    .filter-row .form-select{min-height:36px;color:var(--ink-2);font-weight:600;background-color:#fff;
+      border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 1px 2px rgba(16,24,40,.03);
+      padding:6px 30px 6px 12px}
+    .filter-row .form-select:focus{border-color:#93b4f8;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .filter-row .btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;
+      padding:6px 14px;border-radius:var(--radius-sm);font-weight:700;letter-spacing:.01em}
+    .filter-divider{border-left:1px solid var(--line) !important;padding-left:1rem}
+
+    /* ---------- Buttons (executive hierarchy) ---------- */
+    .btn{--bs-btn-border-radius:var(--radius-sm);font-weight:700;letter-spacing:.01em}
+    .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.22)}
+    .btn-primary{--bs-btn-bg:#2563eb;--bs-btn-border-color:#2563eb;--bs-btn-hover-bg:#1d4ed8;
+      --bs-btn-hover-border-color:#1d4ed8;--bs-btn-active-bg:#1e40af;--bs-btn-active-border-color:#1e40af;
+      --bs-btn-disabled-bg:#93c5fd;--bs-btn-disabled-border-color:#93c5fd;
+      color:#fff;box-shadow:0 1px 2px rgba(30,64,175,.25)}
+    .btn-info{--bs-btn-color:#1e3a8a;--bs-btn-bg:#eef4ff;--bs-btn-border-color:#d9e5fb;
+      --bs-btn-hover-color:#1e3a8a;--bs-btn-hover-bg:#e0ebff;--bs-btn-hover-border-color:#cddcf7;
+      --bs-btn-active-color:#1e3a8a;--bs-btn-active-bg:#d6e4ff;--bs-btn-active-border-color:#b9d0f8}
+    .btn-warning{--bs-btn-color:#7c2d12;--bs-btn-bg:#fff7ed;--bs-btn-border-color:#ffe0c2;
+      --bs-btn-hover-color:#7c2d12;--bs-btn-hover-bg:#ffedd5;--bs-btn-hover-border-color:#fed7aa;
+      --bs-btn-active-color:#7c2d12;--bs-btn-active-bg:#ffedd5;--bs-btn-active-border-color:#fdba74}
+    .btn-success{--bs-btn-color:#064e3b;--bs-btn-bg:#ecfdf5;--bs-btn-border-color:#b8ecd6;
+      --bs-btn-hover-color:#064e3b;--bs-btn-hover-bg:#d1fae5;--bs-btn-hover-border-color:#a7e3c9;
+      --bs-btn-active-color:#064e3b;--bs-btn-active-bg:#d1fae5;--bs-btn-active-border-color:#86d7b4}
+    .btn-danger{--bs-btn-color:#b91c1c;--bs-btn-bg:#fef2f2;--bs-btn-border-color:#fecaca;
+      --bs-btn-hover-color:#b91c1c;--bs-btn-hover-bg:#fee2e2;--bs-btn-hover-border-color:#fda4a4;
+      --bs-btn-active-color:#991b1b;--bs-btn-active-bg:#fee2e2;--bs-btn-active-border-color:#f87171}
+    .btn-dark{--bs-btn-color:#1f2937;--bs-btn-bg:#ffffff;--bs-btn-border-color:#e6eaf2;
+      --bs-btn-hover-color:#111827;--bs-btn-hover-bg:#f3f4f6;--bs-btn-hover-border-color:#d7deea;
+      --bs-btn-active-color:#111827;--bs-btn-active-bg:#e5e7eb;--bs-btn-active-border-color:#d7deea}
+    .btn-secondary{--bs-btn-color:#475569;--bs-btn-bg:#f1f5f9;--bs-btn-border-color:#e2e8f0;
+      --bs-btn-hover-color:#334155;--bs-btn-hover-bg:#e2e8f0;--bs-btn-hover-border-color:#cbd5e1;
+      --bs-btn-active-color:#334155;--bs-btn-active-bg:#cbd5e1;--bs-btn-active-border-color:#94a3b8}
+    .btn-info.text-white{color:#1e40af !important}
+    .btn-warning.text-white{color:#92400e !important}
+    .btn-success.text-white{color:#065f46 !important}
+    .btn-danger.text-white{color:#b91c1c !important}
+    .btn-dark.text-white{color:#1f2937 !important}
+    .btn-group>.btn:not(:last-child){border-top-right-radius:0;border-bottom-right-radius:0}
+    .btn-group>.btn:not(:first-child){border-top-left-radius:0;border-bottom-left-radius:0}
+
+    /* ---------- Panels & KPI cards ---------- */
+    .chart-wrapper{width:100%;overflow-y:auto;background:#fff;border:1px solid var(--line);
+      border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-card);margin-top:14px}
+    .chart-wrapper>.text-muted{font-size:.68rem;letter-spacing:.02em}
+    #chartParent{position:relative;width:100%;min-height:500px}
+    .kpi-row{align-items:stretch}
+    .kpi-row>[class*="col-"]{display:flex;flex-direction:column}
+    .kpi-group{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 12px 12px;
+      box-shadow:var(--shadow-card);flex:1;display:flex;flex-direction:column;justify-content:flex-start;
+      align-items:center;position:relative;overflow:hidden;
+      transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+    .kpi-group::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;pointer-events:none;
+      background:linear-gradient(90deg,#2563eb,#db2777);opacity:.85}
+    .kpi-group:hover{border-color:#dbe2ee;box-shadow:var(--shadow-hover);transform:translateY(-1px)}
+    .kpi-group .stat-label{font-size:.55rem;color:#8fa0b8;font-weight:800;letter-spacing:.06em;
+      text-transform:uppercase;display:block}
+    .kpi-group>.stat-label{display:block;text-align:center;font-size:.67rem;font-weight:800;
+      color:var(--ink-2);letter-spacing:.1em;line-height:1.3;margin-bottom:2px;padding:0 6px;
+      text-transform:uppercase;min-height:1.74rem}
+    .counter{font-size:1.6rem;font-weight:800;line-height:1.05;margin-bottom:0;color:var(--ink)}
+    .counter-sm{font-size:1.05rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
+    .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
+    .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .new-target-val,
+    .other-chip,#schoolsBB{transition:font-size .35s ease}
+    .kpi-hero{display:flex;align-items:center;justify-content:center;width:100%;text-align:center;
+      font-size:2.05rem;font-weight:800;letter-spacing:-.02em;line-height:1.08;overflow:hidden;
+      margin:2px 0 0;min-height:38px}
+    .kpi-sub{display:flex;width:100%;border-top:1px solid var(--line-soft);
+      margin-top:10px;padding-top:8px}
+    .kpi-sub-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 3px}
+    .kpi-sub-item+.kpi-sub-item{border-left:1px solid var(--line-soft)}
+    .kpi-sub-item>.stat-label{font-size:.55rem;letter-spacing:.09em;margin:0;text-transform:uppercase}
+    .kpi-foot{display:flex;align-items:center;justify-content:center;min-height:22px;margin-top:2px}
+    .new-target-val{font-size:.84rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;white-space:nowrap;line-height:1.15}
+    .kpi-sub-item .new-target-val{font-size:.66rem;font-weight:700;color:#475569}
+    .kpi-sub-note{display:block;text-align:center;font-size:.7rem;font-weight:600;color:var(--muted);margin-top:6px}
+    .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
+      background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0}
+    .other-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:#f59e0b;flex:0 0 auto}
+    .hidden{display:none !important}
+
+    /* ---------- Data tables ---------- */
+    .table-responsive{font-size:.74rem;background:#fff;border:1px solid var(--line);border-radius:12px;
+      max-height:none !important;overflow-x:auto !important;overflow-y:visible}
+    .table-responsive thead th{top:0;background:#f8fafc;color:var(--ink-2);z-index:10;box-shadow:none;
+      font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;
+      border-bottom:1px solid var(--line) !important;padding:.5rem .55rem}
+    .table-responsive tbody td{border-color:var(--line-soft) !important;padding:.42rem .55rem;
+      color:#334155;vertical-align:middle}
+    .table-responsive tbody tr{transition:background .12s ease}
+    .table-responsive tbody tr:hover{background:#f6f8fc}
+    .table-striped{--bs-table-striped-bg:rgba(15,23,42,.028)}
+    #tableView td,#tableView th,#breakdownTableWrapper td,#breakdownTableWrapper th{white-space:nowrap}
+    #tableLabel,#breakdownTableLabel{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;font-weight:800 !important}
+    .pagination{--bs-pagination-color:#475569;--bs-pagination-hover-color:#2563eb;
+      --bs-pagination-active-bg:#2563eb;--bs-pagination-active-border-color:#2563eb;
+      --bs-pagination-focus-color:#2563eb;--bs-pagination-border-color:var(--line);
+      --bs-pagination-focus-box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .pagination .page-link{font-size:.72rem;font-weight:600;border-radius:6px;margin:0 1px}
+    .pagination .page-item:first-child .page-link,.pagination .page-item:last-child .page-link{border-radius:6px}
+
+    /* ---------- Insight / Breakdown modals ---------- */
+    .insight-modal-container{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,.62);
+      z-index:3000;display:none;align-items:center;justify-content:center;padding:15px;
+      backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+    .insight-content{background:#f8fafc;width:100%;max-width:960px;max-height:95vh;overflow-y:auto;
+      border-radius:20px;position:relative;padding:28px;
+      box-shadow:0 25px 60px -15px rgba(2,6,23,.45);border:1px solid rgba(255,255,255,.75)}
+    .insight-content .border-bottom{border-color:var(--line) !important}
+    .insight-content h2{color:#0b1f3a;font-weight:800;letter-spacing:-.02em}
+    .section-header{font-size:.68rem;color:#1e293b;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+      margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:9px;
+      display:flex;align-items:center;gap:8px}
+    .section-header::before{content:"";width:3px;height:14px;border-radius:2px;flex:0 0 auto;
+      background:linear-gradient(180deg,#2563eb,#db2777)}
+    .info-card-nb{background:#fff;border:1px solid var(--line);padding:18px 20px;border-radius:14px;
+      height:100%;box-shadow:var(--shadow-card)}
+    .accent-blue{border-left:3px solid #2563eb}
+    .accent-purple{border-left:3px solid #7c3aed}
+    .accent-orange{border-top:3px solid #ea580c}
+    .accent-green{border-left:3px solid #16a34a}
+    .accent-red{border-left:3px solid #dc2626}
+    .no-print{visibility:visible}
+    .ach-bar-wrap{background:#eef1f7;border-radius:999px;height:8px;margin-top:6px;overflow:hidden}
+    .ach-bar-fill{height:100%;border-radius:999px;transition:width .5s ease}
+    .scope-breadcrumb{font-size:.7rem;color:#64748b;margin-top:3px;letter-spacing:.02em;font-weight:600}
+    .scope-breadcrumb span{color:var(--male);font-weight:800}
+    .insight-mini-table{font-size:.72rem;width:100%;border-collapse:collapse}
+    .insight-mini-table th{background:#f8fafc;padding:6px 8px;text-align:left;font-weight:800;color:#475569;
+      white-space:nowrap;font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+    .insight-mini-table td{padding:6px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+    .rank-badge{display:inline-block;width:20px;height:20px;border-radius:7px;font-size:.62rem;font-weight:800;
+      text-align:center;line-height:20px;box-shadow:0 1px 2px rgba(16,24,40,.12)}
+    .insight-content .text-warning{color:#b45309 !important}
+    #ins-narrative-box{box-shadow:0 1px 2px rgba(16,24,40,.04)}
+
+    @media (max-width:575.98px){
+      .container{padding-left:8px;padding-right:8px}
+      .kpi-group{padding:16px 8px 12px;min-height:92px}
+      .kpi-row-1>.col-4,.kpi-row-3>.col-6{width:50%}
+      .kpi-row-2>.col-4{width:50%}
+      .kpi-row-2>.col-4:first-child{width:100%}
+      .kpi-row-1>.col-4:last-child{width:100%}
+      .kpi-group .stat-label{font-size:.56rem}
+      .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .counter-t{white-space:nowrap}
+      .kpi-hero{font-size:clamp(1.15rem,5.2vw,1.75rem);min-height:30px}
+      .kpi-sub{margin-top:8px;padding-top:7px}
+      .kpi-sub-item>.stat-label{font-size:.5rem}
+      .kpi-sub-item .counter-sm{font-size:clamp(.8rem,3.9vw,1rem)}
+      .kpi-foot{min-height:19px}
+      .new-target-val{font-size:.8rem}
+      .kpi-sub-item .new-target-val{font-size:.62rem}
+      .filter-row{--bs-gutter-x:.25rem}
+      .filter-row .form-select{font-size:.68rem;padding-left:9px}
+      .filter-row .btn{padding:6px 10px;font-size:.68rem}
+      .filter-row .btn-group{flex-wrap:wrap}
+      .filter-row .btn-group .btn{flex:1 1 auto}
+      .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px;min-height:1.46rem;line-height:1.25}
+    }
+    @media (max-width:380px){
+      .kpi-group{padding-left:5px;padding-right:5px}
+      .kpi-group .stat-label{font-size:.52rem;letter-spacing:-.15px}
+      .kpi-hero{font-size:clamp(1.05rem,4.8vw,1.5rem);min-height:26px}
+      .kpi-sub-item .counter-sm{font-size:.78rem}
+      .kpi-sub-item .new-target-val{font-size:.58rem}
     }
 
   </style>
 </head>
 
 <body>
-<div id="loader" style="display:flex;position:fixed;width:100%;height:100%;background:rgba(255,255,255,0.9);z-index:999;top:0;left:0;align-items:center;justify-content:center;flex-direction:column;color:#0d6efd;">
-  <div style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #0d6efd;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:15px;"></div>
-  <h6 id="loaderText">Loading enrollment data...</h6>
-</div>
 
 <div id="insightsModal" class="insight-modal-container">
   <div class="insight-content" id="captureArea">
@@ -131,9 +283,9 @@
       <div class="col-md-5">
         <div class="info-card-nb accent-blue h-100">
           <div class="section-header">Enrollment Overview (M / F / T)</div>
-          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Current</small><div class="h5 fw-bold mb-0"><span id="ins-curM" style="color:#0d6efd">0</span> / <span id="ins-curF" style="color:#e83e8c">0</span> / <span id="ins-curT" class="text-primary">0</span></div></div>
-          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Baseline</small><div class="h5 fw-bold mb-0"><span id="ins-baseM" style="color:#0d6efd">0</span> / <span id="ins-baseF" style="color:#e83e8c">0</span> / <span id="ins-baseT">0</span></div></div>
-          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Target</small><div class="h5 fw-bold mb-0"><span id="ins-tarM" style="color:#0d6efd">0</span> / <span id="ins-tarF" style="color:#e83e8c">0</span> / <span id="ins-tarT">0</span></div></div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Current</small><div class="h5 fw-bold mb-0"><span id="ins-curM" style="color:#2563eb">0</span> / <span id="ins-curF" style="color:#db2777">0</span> / <span id="ins-curT" class="text-primary">0</span></div></div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Baseline</small><div class="h5 fw-bold mb-0"><span id="ins-baseM" style="color:#2563eb">0</span> / <span id="ins-baseF" style="color:#db2777">0</span> / <span id="ins-baseT">0</span></div></div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Target</small><div class="h5 fw-bold mb-0"><span id="ins-tarM" style="color:#2563eb">0</span> / <span id="ins-tarF" style="color:#db2777">0</span> / <span id="ins-tarT">0</span></div></div>
           <div class="mb-1"><small class="stat-label">Achievement %</small><div class="h5 fw-bold mb-0"><span id="ins-achM">0%</span> / <span id="ins-achF">0%</span> / <span id="ins-achT">0%</span></div></div>
           <div class="mt-3">
             <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Achievement (Total)</span><span id="ins-ach-bar-label">0%</span></div>
@@ -160,8 +312,8 @@
         <div class="info-card-nb accent-green">
           <div class="section-header">Gender Gap</div>
           <div class="row text-center g-2">
-            <div class="col-3"><small class="stat-label">Boys</small><div id="gapM" class="fw-bold" style="color:#0d6efd">0</div></div>
-            <div class="col-3"><small class="stat-label">Girls</small><div id="gapF" class="fw-bold" style="color:#e83e8c">0</div></div>
+            <div class="col-3"><small class="stat-label">Boys</small><div id="gapM" class="fw-bold" style="color:#2563eb">0</div></div>
+            <div class="col-3"><small class="stat-label">Girls</small><div id="gapF" class="fw-bold" style="color:#db2777">0</div></div>
             <div class="col-3"><small class="stat-label">Gap (G − B)</small><div id="gapDiff" class="fw-bold">0</div></div>
             <div class="col-3"><small class="stat-label">GPI (G/B)</small><div id="gapGPI" class="fw-bold">–</div></div>
           </div>
@@ -170,7 +322,7 @@
       </div>
     </div>
     <div id="ins-dynamic-section" class="row g-4 mb-3"></div>
-    <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f1f5f9;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#1d4ed8;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
+    <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f2f6ff;border:1px solid #dfe8f8;padding:18px 20px;border-radius:14px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#2563eb;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
 </div>
 </div>
 
@@ -192,11 +344,11 @@
       <small class="text-muted">Stacked Male + Female current enrollment • sorted by Ach% • click a bar/row to drill down</small>
     </div>
 
-    <div id="breakdownChartWrapper" style="background:white;border-radius:12px;padding:15px;margin-bottom:20px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+    <div id="breakdownChartWrapper" style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:16px;margin-bottom:20px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);">
       <div id="breakdownChartParent" style="position:relative;width:100%;min-height:500px;"><canvas id="breakdownChart"></canvas></div>
     </div>
 
-    <div id="breakdownTableWrapper" style="background:white;border-radius:12px;padding:15px;box-shadow:0 2px 10px rgba(0,0,0,0.05);">
+    <div id="breakdownTableWrapper" style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="d-flex align-items-center">
           <select id="breakdownPageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderBreakdownTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
@@ -215,13 +367,29 @@
   </div>
 </div>
 
-<div class="container py-2">
-  <div class="text-center mb-2">
-    <h5 class="fw-bold mb-0">SED Punjab Enrollment Dashboard by SheeraZ</h5>
-    <p id="reportTimestamp" class="text-muted small" style="font-size:0.65rem;">Syncing...</p>
+<div class="container py-3">
+  <header class="dash-head">
+    <div class="dash-head-main">
+      <div class="dash-emblem" aria-hidden="true">SED</div>
+      <div>
+        <div class="dash-kicker">School Education Department &middot; Punjab</div>
+        <h1 class="dash-title">Enrollment Monitoring Dashboard</h1>
+      </div>
+    </div>
+    <div class="dash-meta">
+      <div class="text-end">
+        <span id="reportTimestamp" class="sync-chip is-loading">Syncing enrollment data&hellip;</span>
+        <div class="dash-credit">Gender-wise M / F / T analytics &middot; by SheeraZ</div>
+      </div>
+    </div>
+  </header>
+
+  <div id="errorBanner" class="error-banner" role="alert">
+    <span id="errorBannerMsg" class="error-banner-msg"></span>
+    <button type="button" class="btn btn-sm btn-danger" onclick="retryLoad()">Retry</button>
   </div>
 
-  <div class="row g-1 mb-2 filter-row">
+  <div class="row g-2 mb-3 filter-row">
     <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
     <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
     <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
@@ -235,10 +403,10 @@
     </div>
   </div>
 
-  <div class="row g-1 mb-2 filter-row">
+  <div class="row g-2 mb-3 filter-row">
     <div class="col"><select id="viewBySelect" class="form-select" style="font-size:0.75rem;"><option value="">View by...</option></select></div>
     <div class="col-auto"><button class="btn btn-success btn-sm fw-bold" style="font-size:0.75rem;padding:6px 12px;" onclick="openBreakdownModal()">Update</button></div>
-    <div class="col" style="border-left:1px solid #ddd;padding-left:1rem;">
+    <div class="col filter-divider">
       <select id="schoolFilterSelect" class="form-select" style="font-size:0.75rem;">
         <option value="all">All Schools</option>
         <option value="below_baseline">Below Baseline</option>
@@ -251,25 +419,96 @@
     <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
   </div>
 
-  <!-- KPI Row 1: Current | Baseline | Target | New Target (each M/F/T) -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-1">
-    <div class="col-3"><div class="kpi-group text-center position-relative"><span class="stat-label">Current Enrollment</span><small id="currentOther" class="position-absolute text-muted" style="top:4px;right:7px;font-size:.58rem;color:#fd7e14 !important;font-weight:700;white-space:nowrap;" title="Current enrollment reported as Other by school heads">Other: 0</small><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="currentM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="currentF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="currentT" class="counter-sm counter-t text-primary">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Baseline</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="totalBaselineM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="totalBaselineF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="totalBaselineT" class="counter-sm counter-t">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">Targetted Enrollment</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="targetM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="targetF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="targetT" class="counter-sm counter-t text-dark">0</p></div></div></div></div>
-    <div class="col-3"><div class="kpi-group text-center"><span class="stat-label">New Target</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="ntTotalM" class="counter-sm text-info">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="ntTotalF" class="counter-sm text-info">0</p></div><div><span class="stat-label">Total</span><p id="ntTotalT" class="counter-sm counter-t text-info">0</p></div></div></div></div>
+  <!-- KPI Row 1: Current | Baseline | Targeted Enrollment (hero total + M/F + new-target deltas) -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-1">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Current Enrollment</span>
+        <p id="currentT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot"><span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="currentM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="currentF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline</span>
+        <p id="totalBaselineT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot" aria-hidden="true"></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="totalBaselineM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="totalBaselineF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Targeted Enrollment</span>
+        <p id="targetT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot"><b id="targetNewTotal" class="new-target-val">+0</b></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="targetM" class="counter-sm">0</span><span id="targetNewM" class="new-target-val">+0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="targetF" class="counter-sm">0</span><span id="targetNewF" class="new-target-val">+0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- KPI Row 2: Schools | Baseline Gap | Target Gap -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-2">
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Schools</span><p id="schools" class="counter text-success" style="font-size:1rem;">0</p><small id="schoolsBB" class="text-muted" style="font-size:0.65rem;">0 below baseline</small></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Baseline Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="bgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="bgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="bgapT" class="counter-sm counter-t">0</p></div></div></div></div>
-    <div class="col-4"><div class="kpi-group text-center"><span class="stat-label">Target Gap</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="tgapM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="tgapF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="tgapT" class="counter-sm counter-t">0</p></div></div></div></div>
+  <div class="row g-3 mb-3 kpi-row kpi-row-2">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Schools</span>
+        <p id="schools" class="counter text-success">0</p>
+        <small id="schoolsBB" class="kpi-sub-note">0 below baseline</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline Gap</span>
+        <p id="bgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="bgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="bgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Target Gap</span>
+        <p id="tgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="tgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="tgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- KPI Row 3: % Achievement (single metric) | Day Change -->
-  <div class="row g-2 mb-2 kpi-row kpi-row-3">
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">% Achievement</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="achM" class="counter-sm">0%</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="achF" class="counter-sm">0%</p></div><div><span class="stat-label">Total</span><p id="achT" class="counter-sm counter-t">0%</p></div></div></div></div>
-    <div class="col-6"><div class="kpi-group text-center"><span class="stat-label">Day Change</span><div class="d-flex justify-content-around"><div><span class="stat-label" style="color:#0d6efd">Male</span><p id="deltaM" class="counter-sm">0</p></div><div><span class="stat-label" style="color:#e83e8c">Female</span><p id="deltaF" class="counter-sm">0</p></div><div><span class="stat-label">Total</span><p id="deltaT" class="counter-sm counter-t">0</p></div></div></div></div>
+  <!-- KPI Row 3: % Achievement | Day Change -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-3">
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">% Achievement</span>
+        <p id="achT" class="counter kpi-hero">0%</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="achM" class="counter-sm">0%</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="achF" class="counter-sm">0%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Day Change</span>
+        <p id="deltaT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="deltaM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="deltaF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="tableView" class="chart-wrapper hidden">
@@ -306,6 +545,17 @@
  * prevM,prevF,prevT, achM,achF,achT}  (see fetch-data.js) */
 let MASTER_DATA = [], META = null, hierarchy = {};
 let CHARTS = {};
+if (window.Chart) {
+  Chart.defaults.font.family = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+  Chart.defaults.color = "#475569";
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxWidth = 7;
+  Chart.defaults.plugins.tooltip.backgroundColor = "#0f172a";
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+  Chart.defaults.plugins.tooltip.titleFont = { family: "'Inter', system-ui, sans-serif", size: 12, weight: "700" };
+  Chart.defaults.plugins.tooltip.bodyFont = { family: "'Inter', system-ui, sans-serif", size: 11 };
+}
 let fullTableData = [], currentPage = 1, currentFilterType = "all";
 
 const $ = (id) => document.getElementById(id);
@@ -319,8 +569,209 @@ function deltaParts(d) {
   return d > 0 ? { icon: "↑", color: "#198754" } : d < 0 ? { icon: "↓", color: "#dc3545" } : { icon: "→", color: "#6c757d" };
 }
 
-function showLoader(txt) { if (txt) $("loaderText").innerText = txt; $("loader").style.display = "flex"; }
-function hideLoader() { $("loader").style.display = "none"; }
+function setSyncUI(state, text) {
+  const chip = $("reportTimestamp");
+  if (!chip) return;
+  chip.classList.remove("is-loading", "is-error", "is-ok");
+  chip.onclick = null;
+  if (state === "loading") chip.classList.add("is-loading");
+  else if (state === "error") { chip.classList.add("is-error"); chip.onclick = retryLoad; }
+  else if (state === "ok") chip.classList.add("is-ok");
+  if (text != null) chip.innerText = text;
+}
+function showErrorBanner(msg) {
+  const b = $("errorBanner"), t = $("errorBannerMsg");
+  if (t) t.innerText = msg || "Could not load enrollment data.";
+  if (b) b.style.display = "flex";
+}
+function hideErrorBanner() { const b = $("errorBanner"); if (b) b.style.display = "none"; }
+
+/* ------- KPI figure "odometer" animation -------
+   Spin phase (data still loading): every KPI figure - including the
+   "Other" count and the below-baseline note - cycles its digits inside a
+   fixed-width layout that is pre-fitted to the slot, so nothing overflows
+   or gets clipped and all figures stay the same size.
+   Roll phase (real values known): each digit rolls and then locks into its
+   final position one-by-one from left to right, so the real number
+   "magically" forms. Font size eases via CSS transition - no pop at end. */
+function kpiKind(id) {
+  if (id.indexOf("ach") === 0) return { kind: "pct" };
+  if (id.indexOf("delta") === 0) return { kind: "delta" };
+  if (id.indexOf("bgap") === 0 || id.indexOf("tgap") === 0 || id.indexOf("targetNew") === 0) return { kind: "signed" };
+  return { kind: "num" };
+}
+function groupedInt(str) {
+  str = String(str);
+  const out = []; let i = str.length;
+  while (i > 0) { const from = Math.max(0, i - 3); out.unshift(str.slice(from, i)); i = from; }
+  return out.join(",");
+}
+function randomDigits(n) { let s = ""; for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10); return s; }
+function kpiSpinEls() {
+  return Array.from(document.querySelectorAll(
+    ".kpi-row .kpi-group .counter, .kpi-row .kpi-group .counter-sm, " +
+    ".kpi-row .kpi-group .new-target-val, .kpi-row .other-chip, #schoolsBB"
+  )).filter((el) => el.id);
+}
+function spinShape(el) {
+  const id = el.id, kind = kpiKind(id).kind;
+  const sh = { pre: "", post: "", sign: "", ints: 6, dec: 0 };
+  if (kind === "pct") { sh.ints = 2; sh.dec = 1; sh.post = "%"; }
+  else if (kind === "delta") { sh.pre = Math.random() < 0.5 ? "\u2191" : "\u2193"; sh.ints = 6; }
+  else if (kind === "signed") { sh.sign = Math.random() < 0.55 ? "+" : "-"; sh.ints = 6; }
+  else if (id === "schools") sh.ints = 5;
+  else if (id === "schoolsBB") { sh.ints = 4; sh.post = " below baseline"; }
+  else if (id === "currentOther") { sh.pre = "Other: "; sh.ints = 4; }
+  else sh.ints = 8; /* hero totals */
+  return sh;
+}
+function renderShape(sh, intStr, decStr) {
+  const ints = groupedInt(intStr);
+  const dec = sh.dec ? "." + (decStr || randomDigits(sh.dec)) : "";
+  return sh.pre + sh.sign + ints + dec + sh.post;
+}
+/* Fit an element so `text` fits its slot at the largest readable size
+   (transitions smooth any later size change). */
+function fitElToText(el, text) {
+  const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
+  if (!host || host.clientWidth <= 0) return;
+  const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+  const hero = el.classList.contains("counter");
+  const floor = window.innerWidth <= 575.98 ? (hero ? 10 : 8) : (hero ? 13 : 9);
+  el.style.fontSize = base + "px";
+  el.innerText = text;
+  const avail = Math.max(20, host.clientWidth - 2);
+  let fs = base, g = 0;
+  while (g++ < 90 && el.scrollWidth > avail && fs > floor) {
+    fs = Math.max(floor, fs - 0.2);
+    el.style.fontSize = fs + "px";
+  }
+}
+
+let spinning = false, spinRAF = 0, rollRAF = 0, lastRollSig = "";
+function startSpin() {
+  if (spinning) return;
+  spinning = true;
+  const els = kpiSpinEls();
+  els.forEach((el) => {
+    const sh = spinShape(el);
+    el.__shape = sh;
+    fitElToText(el, renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec)));
+  });
+  const step = () => {
+    if (!spinning) return;
+    els.forEach((el) => {
+      const sh = el.__shape;
+      if (!sh) return;
+      el.innerText = renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec));
+    });
+    spinRAF = requestAnimationFrame(step);
+  };
+  spinRAF = requestAnimationFrame(step);
+}
+function stopSpin() {
+  spinning = false;
+  if (spinRAF) { cancelAnimationFrame(spinRAF); spinRAF = 0; }
+}
+function reFitSpinFonts() {
+  kpiSpinEls().forEach((el) => {
+    const sh = el.__shape;
+    if (sh) fitElToText(el, renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec)));
+  });
+}
+
+/* Digit cascade into the real values currently shown in the DOM. */
+function rollKPIValues() {
+  if (rollRAF) { cancelAnimationFrame(rollRAF); rollRAF = 0; }
+  const els = kpiSpinEls();
+  if (!els.length) return;
+  const sig = els.map((el) => el.id + "=" + el.innerText).join("|");
+  if (sig === lastRollSig) return;
+  lastRollSig = sig;
+
+  const dur = 950, t0 = performance.now();
+  const tasks = els.map((el) => {
+    const finalChars = Array.from(el.innerText);
+    const finalText = finalChars.join("");
+    fitElToText(el, finalText);                 /* settle size first (eased by CSS) */
+    const digIdx = [];
+    finalChars.forEach((ch, i) => { if (/[0-9]/.test(ch)) digIdx.push(i); });
+    const startChars = finalChars.map((ch) => (/[0-9]/.test(ch) ? String(Math.floor(Math.random() * 10)) : ch));
+    el.innerText = startChars.join("");          /* randomize immediately: no real-value flash */
+    return { el, finalChars, digIdx, startChars, finalText };
+  });
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / dur);
+    tasks.forEach((task) => {
+      const out = task.finalChars.map((ch, i) => {
+        if (!/[0-9]/.test(ch)) return ch;
+        const pos = task.digIdx.indexOf(i);
+        const lockAt = task.digIdx.length ? ((pos + 1) / task.digIdx.length) * 0.92 : 1;
+        if (t >= lockAt) return ch;
+        const rollStart = parseInt(task.startChars[i], 10) || 0;
+        return String((rollStart + Math.floor((now - t0) / 12) + pos) % 10);
+      });
+      task.el.innerText = out.join("");
+    });
+    if (t < 1) { rollRAF = requestAnimationFrame(step); }
+    else {
+      tasks.forEach((task) => { task.el.innerText = task.finalText; });
+      rollRAF = 0;
+      fitKPIValues();
+    }
+  };
+  rollRAF = requestAnimationFrame(step);
+}
+
+async function loadInitialData() {
+  hideErrorBanner();
+  setSyncUI("loading", "Syncing enrollment data\u2026");
+  startSpin();
+  try {
+    const { rows, meta, report } = await GradesLoader.loadGradesData();
+    MASTER_DATA = rows; META = meta;
+    hierarchy = buildHierarchy(rows);
+    setupDropdowns();
+    updateViewByDropdown();
+    const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
+    stopSpin();
+    setSyncUI("ok", `(Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools)`);
+    loadData();
+  } catch (e) {
+    console.error(e);
+    stopSpin();
+    setSyncUI("error", "Sync failed \u2014 click to retry");
+    showErrorBanner((e && e.message) ? e.message : "Could not load enrollment data.");
+  }
+}
+function retryLoad() { loadInitialData(); }
+window.onload = () => { loadInitialData(); };
+
+/* Size each KPI figure as large as possible while keeping its label readable.
+   Base sizes apply when figures are short; long (9-10 digit) values shrink only
+   as needed. Visual-only. */
+function fitKPIValues() {
+  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .new-target-val").forEach((el) => {
+    el.style.fontSize = "";
+    const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
+    if (!host || host.clientWidth <= 0) return;
+    const avail = Math.max(20, host.clientWidth - 2);
+    if (el.scrollWidth <= avail) return;
+    const hero = el.classList.contains("counter");
+    const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+    const floor = window.innerWidth <= 575.98 ? (hero ? 10 : 8) : (hero ? 13 : 9);
+    let fs = base;
+    let guard = 0;
+    while (guard++ < 80 && el.scrollWidth > avail && fs > floor) {
+      fs = Math.max(floor, fs - 0.25);
+      el.style.fontSize = fs + "px";
+    }
+  });
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+  if (spinning) reFitSpinFonts();
+  else if (!rollRAF) fitKPIValues();
+});
 
 function currentFilters() {
   return { d: $("district").value, w: $("wing").value, t: $("tehsil").value, m: $("markaz").value };
@@ -385,24 +836,7 @@ function buildHierarchy(data) {
   return h;
 }
 
-window.onload = async () => {
-  showLoader("Loading enrollment data...");
-  try {
-    const { rows, meta, report } = await GradesLoader.loadGradesData();
-    MASTER_DATA = rows; META = meta;
-    hierarchy = buildHierarchy(rows);
-    setupDropdowns();
-    updateViewByDropdown();
-    const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
-    $("reportTimestamp").innerText = `(Last sync: ${when} • ${report.rows.toLocaleString()} schools)`;
-    showLoader(`Processing ${report.rows.toLocaleString()} schools...`);
-    loadData();
-    hideLoader();
-  } catch (e) {
-    console.error(e);
-    showLoader("❌ " + e.message);
-  }
-};
+
 
 function setupDropdowns() {
   const distSelect = $("district");
@@ -459,13 +893,19 @@ function updateKPIs(stats, rows) {
   $("currentOther").innerText = "Other: " + fmt(stats.curOther);
   setTriple("totalBaseline", stats.basM, stats.basF, stats.basT, fmt);
   setTriple("target", stats.tarM, stats.tarF, stats.tarT, fmt);
-  setTriple("ntTotal", stats.ntM, stats.ntF, stats.ntT, fmt);
+  $("targetNewTotal").innerText = signed(stats.ntT);
+  $("targetNewTotal").style.color = gapColor(stats.ntT);
+  $("targetNewM").innerText = signed(stats.ntM);
+  $("targetNewM").style.color = gapColor(stats.ntM);
+  $("targetNewF").innerText = signed(stats.ntF);
+  $("targetNewF").style.color = gapColor(stats.ntF);
   $("schools").innerText = fmt(stats.n);
   $("schoolsBB").innerText = fmt(rows.filter((r) => r.curT < r.basT).length) + " below baseline";
   setTriple("bgap", stats.curM - stats.basM, stats.curF - stats.basF, stats.curT - stats.basT, signed, gapColor);
   setTriple("tgap", stats.curM - stats.tarM, stats.curF - stats.tarF, stats.curT - stats.tarT, signed, gapColor);
   setTriple("ach", stats.achM, stats.achF, stats.achT, (v) => v.toFixed(1) + "%", achColor);
   setTriple("delta", stats.dM, stats.dF, stats.dT, (v) => { const p = deltaParts(v); return p.icon + signed(v); }, (v) => deltaParts(v).color);
+  rollKPIValues();
 }
 
 /* ---------------- Chart ---------------- */
@@ -501,19 +941,19 @@ function renderStackedChart(key, canvasId, parentId, data, onClick) {
     data: {
       labels: data.map((g) => `${g.name} • ${g.achT.toFixed(1)}%`),
       datasets: [
-        { label: "Male", data: data.map((g) => g.curM), backgroundColor: "#0d6efd", stack: "s" },
-        { label: "Female", data: data.map((g) => g.curF), backgroundColor: "#e83e8c", stack: "s" },
+        { label: "Male", data: data.map((g) => g.curM), backgroundColor: "#2563eb", hoverBackgroundColor: "#3b82f6", borderRadius: 3, borderSkipped: false, stack: "s" },
+        { label: "Female", data: data.map((g) => g.curF), backgroundColor: "#db2777", hoverBackgroundColor: "#ec4899", borderRadius: 3, borderSkipped: false, stack: "s" },
       ],
     },
     options: {
       indexAxis: "y", responsive: true, maintainAspectRatio: false,
       scales: {
-        x: { stacked: true, title: { display: true, text: "Current enrollment" } },
-        y: { stacked: true, ticks: { autoSkip: false, font: { size: 9 } } },
+        x: { stacked: true, border: { display: false }, grid: { color: "rgba(15,23,42,0.05)" }, ticks: { color: "#64748b", font: { size: 10 } }, title: { display: true, text: "Current enrollment", color: "#64748b", font: { size: 10, weight: "600" } } },
+        y: { stacked: true, grid: { display: false }, categoryPercentage: 0.6, barPercentage: 0.92, ticks: { autoSkip: false, color: "#334155", font: { size: 9, weight: "500" } } },
       },
       plugins: {
-        legend: { display: true, position: "top", align: "end", labels: { boxWidth: 12, font: { size: 10 } } },
-        tooltip: {
+        legend: { display: true, position: "top", align: "end", labels: { usePointStyle: true, boxWidth: 8, padding: 14, font: { size: 11, weight: "600" } } },
+        tooltip: { padding: 10, cornerRadius: 8,
           callbacks: {
             label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.x)}`,
             footer: (items) => {
@@ -585,7 +1025,7 @@ function sortData() {
 }
 
 function genderHeadHTML(nameHead) {
-  const sub = '<th style="color:#0d6efd">M</th><th style="color:#e83e8c">F</th><th>T</th>';
+  const sub = '<th style="color:#2563eb">M</th><th style="color:#db2777">F</th><th>T</th>';
   return `<tr><th rowspan="2">Sr.</th><th rowspan="2">${nameHead}</th>` +
     `<th colspan="3" class="text-center border-start">Base</th><th colspan="3" class="text-center border-start">Curr</th>` +
     `<th colspan="3" class="text-center border-start">Δ</th><th colspan="3" class="text-center border-start">Targ</th>` +
@@ -664,7 +1104,7 @@ function showInsights() {
   $("gapM").innerText = fmt(stats.curM);
   $("gapF").innerText = fmt(stats.curF);
   $("gapDiff").innerText = signed(gap);
-  $("gapDiff").style.color = gap === 0 ? "#6c757d" : gap > 0 ? "#e83e8c" : "#0d6efd";
+  $("gapDiff").style.color = gap === 0 ? "#6c757d" : gap > 0 ? "#db2777" : "#2563eb";
   $("gapGPI").innerText = gpi == null ? "–" : gpi.toFixed(2);
   const adiff = stats.achF - stats.achM;
   let verdict;
@@ -677,7 +1117,7 @@ function showInsights() {
 
   if (CHARTS.donut) CHARTS.donut.destroy();
   CHARTS.donut = new Chart($("insightDonut"), {
-    type: "doughnut", data: { labels: ["Below Baseline", "Below Target", "Above Target"], datasets: [{ data: [bb, bt, at], backgroundColor: ["#dc3545", "#ffc107", "#198754"], borderWidth: 2 }] },
+    type: "doughnut", data: { labels: ["Below Baseline", "Below Target", "Above Target"], datasets: [{ data: [bb, bt, at], backgroundColor: ["#dc3545", "#ffc107", "#198754"], borderColor: "#ffffff", borderWidth: 3, hoverOffset: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { display: false } } },
   });
 
@@ -734,7 +1174,7 @@ function buildDynamicSection(scopeLevel, filtered, f, stats, schoolsBB) {
     criticalInfo = `Markaz ${markazs[0].name} is most critical at ${markazs[0].achT.toFixed(1)}%.`;
   } else if (scopeLevel === 4) {
     const schools = filtered.map(schoolRow).sort((a, b) => a.achT - b.achT);
-    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f1f5f9;"><tr><th>School</th><th>Base T</th><th>M</th><th>F</th><th>T</th><th>Δ T</th><th>Targ T</th><th>Ach M</th><th>Ach F</th><th>Ach T</th></tr></thead><tbody>${schools.map((s) => {
+    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f8fafc;"><tr><th>School</th><th>Base T</th><th>M</th><th>F</th><th>T</th><th>Δ T</th><th>Targ T</th><th>Ach M</th><th>Ach F</th><th>Ach T</th></tr></thead><tbody>${schools.map((s) => {
       const d = deltaParts(s.dT);
       return `<tr><td><small>${s.emis}</small><br><strong>${s.name}</strong></td><td>${fmt(s.basT)}</td><td>${fmt(s.curM)}</td><td>${fmt(s.curF)}</td><td class="fw-bold">${fmt(s.curT)}</td><td style="color:${d.color};font-weight:700;">${d.icon}${fmt(Math.abs(s.dT))}</td><td>${fmt(s.tarT)}</td><td style="font-weight:700;color:${achColor(s.achM)};">${s.achM.toFixed(1)}%</td><td style="font-weight:700;color:${achColor(s.achF)};">${s.achF.toFixed(1)}%</td><td style="font-weight:700;color:${achColor(s.achT)};">${s.achT.toFixed(1)}%</td></tr>`;
     }).join("")}</tbody></table></div></div></div>`;
@@ -925,7 +1365,7 @@ function exportBreakdownPDF() {
   btns.forEach((b) => (b.style.opacity = "0"));
 
   html2canvas(captureArea, {
-    scale: 2, useCORS: true, backgroundColor: "#fbfbfb", logging: false,
+    scale: 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
     onclone: (clonedDoc) => {
       const area = clonedDoc.getElementById("breakdownContent");
       area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
@@ -976,7 +1416,7 @@ function exportInsightPDF() {
   btns.forEach((b) => (b.style.opacity = "0"));
 
   html2canvas(captureArea, {
-    scale: 2, useCORS: true, backgroundColor: "#fbfbfb", logging: false,
+    scale: 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
     onclone: (clonedDoc) => {
       const area = clonedDoc.getElementById("captureArea");
       area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
