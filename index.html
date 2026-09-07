@@ -66,10 +66,14 @@
       letter-spacing:.06em;box-shadow:0 8px 18px -6px rgba(37,99,235,.65)}
     .dash-kicker{font-size:.6rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:var(--muted)}
     .dash-title{font-size:1.22rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:1px 0 0;line-height:1.2}
-    .dash-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .dash-credit{font-size:.62rem;color:#94a3b8;font-weight:600;text-align:right;margin-top:4px;letter-spacing:.02em}
+    .dash-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+    /* Column stack keeps the chip and the credit line on one shared alignment
+       edge; flex (not inline-flow) avoids the baseline gap under the pill. */
+    .dash-meta-stack{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0;max-width:100%}
+    .dash-credit{font-size:.62rem;color:#94a3b8;font-weight:600;text-align:right;letter-spacing:.02em}
     .sync-chip{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:600;color:var(--ink-2);
       background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;
+      max-width:100%;text-align:left;
       box-shadow:0 1px 2px rgba(16,24,40,.04)}
     .sync-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e;
       box-shadow:0 0 0 3px rgba(34,197,94,.16);flex:0 0 auto}
@@ -85,6 +89,9 @@
     @media (max-width:575.98px){
       .dash-head{padding:12px 14px}
       .dash-title{font-size:1.02rem}
+      /* Chip and credit line share the left edge once the masthead wraps */
+      .dash-meta{width:100%}
+      .dash-meta-stack{align-items:flex-start;width:100%}
       .dash-credit{text-align:left}
     }
 
@@ -395,7 +402,7 @@
       </div>
     </div>
     <div class="dash-meta">
-      <div class="text-end">
+      <div class="dash-meta-stack">
         <span id="reportTimestamp" class="sync-chip is-loading">Syncing enrollment data&hellip;</span>
         <div class="dash-credit">Gender-wise M / F / T analytics &middot; by SheeraZ</div>
       </div>
@@ -753,7 +760,7 @@ async function loadInitialData() {
     updateViewByDropdown();
     const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
     stopSpin();
-    setSyncUI("ok", `(Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools)`);
+    setSyncUI("ok", `Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools`);
     loadData();
   } catch (e) {
     console.error(e);
