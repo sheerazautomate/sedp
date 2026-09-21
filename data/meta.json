@@ -1,9 +1,9 @@
 {
-  "fetched_at_utc": "2026-09-20T23:11:12Z",
-  "fetched_at_pkt": "2026-09-21 04:11 AM PKT",
+  "fetched_at_utc": "2026-09-21T06:13:29Z",
+  "fetched_at_pkt": "2026-09-21 11:13 AM PKT",
   "ref_date_pkt": "2026-09-21",
   "sync_type": "sync",
   "rows": 38134,
-  "bytes": 4101333,
+  "bytes": 4245415,
   "source": "grades.pesrp.edu.pk districts-enrollment export"
 }
