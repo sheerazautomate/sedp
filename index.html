@@ -633,7 +633,6 @@ const encKey = (k) => encodeURIComponent(k).replace(/'/g, "%27");
 /* Day-change reference health, set from the loader (see fetch-data.js assessDelta). */
 let DELTA = { state: "ok", reason: "", refDate: null };
 let batchScope = false;       /* true while several filters are set at once (avoids repeated redraws) */
-const MIN_RANK_GAP = 10;      /* Top/Bottom 5 lists: only entries with Target - Baseline >= this are ranked */
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function fmtRefDate(s) {
@@ -1256,6 +1255,11 @@ function buildDynamicSection(scopeLevel, filtered, f, stats, schoolsBB) {
     });
   }
 
+  function changeTxt(v) {
+    const c = v > 0 ? "#198754" : v < 0 ? "#dc3545" : "#6c757d";
+    return `<small style="color:${c};font-weight:700;" title="Change since baseline">${v > 0 ? "\u25B2 +" : v < 0 ? "\u25BC \u2212" : "\u2192 "}${fmt(Math.abs(v))}</small>`;
+  }
+
   function nameCell(name, sub) {
     return `<strong>${escHtml(name)}</strong>` + (sub ? `<br><small class="text-muted">${escHtml(sub)}</small>` : "");
   }
@@ -1270,17 +1274,17 @@ function buildDynamicSection(scopeLevel, filtered, f, stats, schoolsBB) {
   /* Top / Bottom list card: Base -> Current -> Target next to Ach% so outliers explain themselves. */
   function rankTable(title, rows, accentClass, note) {
     const body = rows.length ? rows.map((r, i) =>
-      `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i + 1}</span></td><td style="white-space:normal;min-width:130px;">${nameCell(r.name, r.sub)}</td><td>${fmt(r.basT)} \u2192 <strong>${fmt(r.curT)}</strong> \u2192 ${fmt(r.tarT)}</td>${deltaCell(r.dT)}<td style="font-weight:700;color:${achColor(r.achT)};">${r.achT.toFixed(1)}%</td></tr>`
-    ).join("") : `<tr><td colspan="5" class="text-muted">No entries qualify for ranking.</td></tr>`;
+      `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i + 1}</span></td><td style="white-space:normal;min-width:130px;">${nameCell(r.name, r.sub)}</td><td>${fmt(r.basT)} \u2192 <strong>${fmt(r.curT)}</strong> \u2192 ${fmt(r.tarT)}</td>${deltaCell(r.dT)}<td style="font-weight:700;color:${achColor(r.achT)};">${r.achT.toFixed(1)}%<br>${changeTxt(r.curT - r.basT)}</td></tr>`
+    ).join("") : `<tr><td colspan="5" class="text-muted">No entries to rank.</td></tr>`;
     return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th><th>Base \u2192 Curr \u2192 Targ</th><th>\u0394</th><th>Ach%</th></tr></thead><tbody>${body}</tbody></table></div><div class="text-muted mt-2" style="font-size:.62rem;">${note}</div></div>`;
   }
 
   function rankPair(label, noun, items) {
-    const pool = items.filter((x) => x.tarT - x.basT >= MIN_RANK_GAP).sort((a, b) => b.achT - a.achT);
+    const pool = [...items].sort((a, b) => b.achT - a.achT);
     const n = pool.length, topN = Math.min(5, Math.ceil(n / 2)), botN = Math.min(5, n - topN);
     const top = pool.slice(0, topN);
     const bottom = pool.slice(n - botN).reverse();
-    const note = `Ranked by Ach% among ${noun} with Target \u2212 Baseline \u2265 ${MIN_RANK_GAP} (${fmt(n)} of ${fmt(items.length)} qualify).`;
+    const note = `Ranked by Ach% across all ${fmt(n)} ${noun}. \u25B2/\u25BC under the % = students gained/lost since baseline.`;
     return `<div class="col-md-6">${rankTable(`Bottom ${botN || 5} ${label}`, bottom, "accent-red", note)}</div><div class="col-md-6">${rankTable(`Top ${topN || 5} ${label}`, top, "accent-green", note)}</div>`;
   }
 
