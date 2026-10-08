@@ -1,373 +1,1647 @@
-/* ============================================================================
- * fetch-data.js — Grades data loader for the SED Punjab Enrollment Dashboard
- * ----------------------------------------------------------------------------
- * Single data source: the Grades `districts-enrollment` CSV export, committed
- * daily by the GitHub Actions worker (`scripts/fetch_grades.py`):
- *
- *   data/enrollment.csv       latest snapshot (REQUIRED)
- *   data/enrollment_prev.csv  the current PKT day's midnight reference
- *                            snapshot (optional; for day-change Δ)
- *   data/emis_wing.json       one-time {EMIS: Wing} lookup (optional)
- *   data/meta.json            {fetched_at_pkt, rows, ...} (optional)
- *
- * Grades export columns (exact headers, see screenshot-verified list):
- *   Sr.# | District | Tehsil | Markaz | EMIS | School Name |
- *   Male Baseline | Male Current | Male Target |
- *   Female Baseline | Female Current | Female Target |
- *   Total Baseline | Total Current | Total Target | Achievement %
- *
- * Verified formula:  Achievement % = (Current - Baseline) / (Target - Baseline) * 100
- * (NT-style with NT = Target - Baseline). It is computed here for every school
- * (Male, Female and Total) and for every group aggregate (from summed values).
- * It is deliberately UNCLAMPED: above 100% means the target was exceeded and a
- * negative value means enrollment fell below baseline. The export's own
- * "Achievement %" column (which is clamped to 0-100) is NOT used for display.
- * There is NO second "% Ach" metric.
- *
- * Totals: Baseline and Target totals are Male + Female. Total Current is the
- * export's own figure, which also counts the "Other" category (children
- * reported as Other by school heads, with no Male/Female column). The
- * difference is kept per school as `curOther` and shown on the dashboard, so
- * Current Male + Female + Other = Total Current.
- *
- * Day change: compared against data/enrollment_prev.csv. The loader reports
- * `report.delta = {state, reason, refDate}` with state "ok" | "warn" | "error":
- *   error  prev file missing/unreadable, or > 2% of schools absent from it
- *   warn   prev file exists but meta.ref_date_pkt is not today's PKT date
- * (the dashboard shows N/A on "error" and an amber note on "warn").
- *
- * Wing resolution per school: emis_wing.json lookup -> Markaz-name keyword
- * fallback (Female/Male; "female" tested BEFORE "male" since it contains the
- * substring) -> "Unknown". Only schools whose resolved wing is SE, M-EE, or
- * W-EE are kept; Male / Female / Unknown (and any other label) are dropped.
- *
- * Usage (plain <script> include, no modules so it works on GitHub Pages):
- *   const { rows, meta, report } = await loadGradesData();
- * ========================================================================== */
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+  <base target="_top">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="favicon.png">
+   <!-- Open Graph Meta Tags (WhatsApp, Facebook, LinkedIn) -->
+  <meta property="og:title" content="SED Punjab Enrollment Dashboard">
+  <meta property="og:description" content="Comprehensive enrollment monitoring dashboard for Punjab schools with detailed analytics and daily insights.">
+  <meta property="og:image" content="https://sheerazautomate.github.io/sedp/preview-image.png">
+  <meta property="og:url" content="https://sheerazautomate.github.io/sedp/">
+  <meta property="og:type" content="website">
+  <!-- Twitter Card Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SED Punjab Enrollment Dashboard">
+  <meta name="twitter:description" content="Comprehensive enrollment monitoring dashboard for Punjab schools with real-time analytics and insights.">
+  <meta name="twitter:image" content="https://sheerazautomate.github.io/sedp/preview-image.png">
 
-const GRADES_PATHS = {
-  current: "data/enrollment.csv",
-  prev: "data/enrollment_prev.csv",
-  wing: "data/emis_wing.json",
-  meta: "data/meta.json",
-};
+  <!-- General Meta Tags -->
+  <meta name="description" content="Comprehensive enrollment monitoring dashboard for Punjab schools with real-time analytics and insights.">
+  <meta name="theme-color" content="#2563eb">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="fetch-data.js"></script>
+  <style>
 
-/* Header matching: headers are normalized (lowercase, strip % . # and all
- * whitespace/underscores) then looked up in these alias lists. */
-function normHeader(h) {
-  return String(h || "")
-    .toLowerCase()
-    .replace(/[%#.\u00a0]/g, "")
-    .replace(/[\s_]+/g, "");
+    :root{
+      --ink:#0f172a; --ink-2:#334155; --muted:#64748b;
+      --line:#e6eaf2; --line-soft:#eef1f7;
+      --male:#2563eb; --female:#db2777;
+      --shadow-card:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);
+      --shadow-hover:0 10px 26px -10px rgba(16,24,40,.16);
+      --radius:16px; --radius-sm:10px;
+      --bs-primary:#2563eb; --bs-primary-rgb:37,99,235;
+    }
+    @keyframes syncBlink{0%,100%{opacity:1}50%{opacity:.12}}
+    @keyframes softPulse{0%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 3px rgba(34,197,94,.18)}}
+    body{
+      background:
+        radial-gradient(1100px 480px at 12% -8%, rgba(37,99,235,.07), transparent 60%),
+        radial-gradient(900px 460px at 105% -5%, rgba(219,39,119,.05), transparent 55%),
+        #f4f6fb;
+      background-attachment: fixed;
+      font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--ink); font-variant-numeric:tabular-nums;
+      -webkit-font-smoothing:antialiased;
+    }
+    ::selection{background:rgba(37,99,235,.16)}
+    .text-primary{color:var(--male) !important}
+    .text-info{color:#0e7490 !important}
+
+    /* ---------- Masthead ---------- */
+    .dash-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+      padding:16px 18px;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow-card);margin-bottom:14px;position:relative;overflow:hidden}
+    .dash-head-main{display:flex;align-items:center;gap:13px;min-width:0}
+    .dash-emblem{flex:0 0 auto;width:46px;height:46px;border-radius:50%;
+      object-fit:contain;display:block;background:transparent;
+      box-shadow:0 8px 18px -6px rgba(37,99,235,.45)}
+    .dash-kicker{font-size:.6rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:var(--muted)}
+    .dash-title{font-size:1.22rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:1px 0 0;line-height:1.2}
+    .dash-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+    /* Column stack keeps the chip and the credit line on one shared alignment
+       edge; flex (not inline-flow) avoids the baseline gap under the pill. */
+    .dash-meta-stack{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0;max-width:100%}
+    .dash-credit{font-size:.62rem;color:#94a3b8;font-weight:600;text-align:right;letter-spacing:.02em}
+    .sync-chip{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:600;color:var(--ink-2);
+      background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;
+      max-width:100%;text-align:left;
+      box-shadow:0 1px 2px rgba(16,24,40,.04)}
+    .sync-chip::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e;
+      box-shadow:0 0 0 3px rgba(34,197,94,.16);flex:0 0 auto}
+    .sync-chip.is-loading::before{background:#facc15;box-shadow:0 0 0 3px rgba(250,204,21,.35);
+      animation:syncBlink .38s linear infinite}
+    .sync-chip.is-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c;cursor:pointer}
+    .sync-chip.is-error::before{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.22)}
+    .sync-chip.is-ok::before{animation:softPulse 1.6s ease-out 1}
+    .error-banner{display:none;align-items:center;gap:12px;background:#fef2f2;border:1px solid #fecaca;
+      color:#991b1b;border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:.8rem;font-weight:600}
+    .error-banner .error-banner-msg{flex:1 1 auto;min-width:0}
+    .error-banner .btn{flex:0 0 auto}
+    @media (max-width:575.98px){
+      .dash-head{padding:12px 14px}
+      .dash-title{font-size:1.02rem}
+      /* Chip and credit line share the left edge once the masthead wraps */
+      .dash-meta{width:100%}
+      .dash-meta-stack{align-items:flex-start;width:100%}
+      .dash-credit{text-align:left}
+    }
+
+    /* ---------- Filter bar ---------- */
+    .filter-row{align-items:center}
+    .filter-row .form-select,.filter-row .btn{font-size:.72rem}
+    .filter-row .form-select{min-height:36px;color:var(--ink-2);font-weight:600;background-color:#fff;
+      border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:0 1px 2px rgba(16,24,40,.03);
+      padding:6px 30px 6px 12px}
+    .filter-row .form-select:focus{border-color:#93b4f8;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .filter-row .btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;
+      padding:6px 14px;border-radius:var(--radius-sm);font-weight:700;letter-spacing:.01em}
+    .filter-divider{border-left:1px solid var(--line) !important;padding-left:1rem}
+
+    /* ---------- Buttons (executive hierarchy) ---------- */
+    .btn{--bs-btn-border-radius:var(--radius-sm);font-weight:700;letter-spacing:.01em}
+    .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.22)}
+    .btn-primary{--bs-btn-bg:#2563eb;--bs-btn-border-color:#2563eb;--bs-btn-hover-bg:#1d4ed8;
+      --bs-btn-hover-border-color:#1d4ed8;--bs-btn-active-bg:#1e40af;--bs-btn-active-border-color:#1e40af;
+      --bs-btn-disabled-bg:#93c5fd;--bs-btn-disabled-border-color:#93c5fd;
+      color:#fff;box-shadow:0 1px 2px rgba(30,64,175,.25)}
+    .btn-info{--bs-btn-color:#1e3a8a;--bs-btn-bg:#eef4ff;--bs-btn-border-color:#d9e5fb;
+      --bs-btn-hover-color:#1e3a8a;--bs-btn-hover-bg:#e0ebff;--bs-btn-hover-border-color:#cddcf7;
+      --bs-btn-active-color:#1e3a8a;--bs-btn-active-bg:#d6e4ff;--bs-btn-active-border-color:#b9d0f8}
+    .btn-warning{--bs-btn-color:#7c2d12;--bs-btn-bg:#fff7ed;--bs-btn-border-color:#ffe0c2;
+      --bs-btn-hover-color:#7c2d12;--bs-btn-hover-bg:#ffedd5;--bs-btn-hover-border-color:#fed7aa;
+      --bs-btn-active-color:#7c2d12;--bs-btn-active-bg:#ffedd5;--bs-btn-active-border-color:#fdba74}
+    .btn-success{--bs-btn-color:#064e3b;--bs-btn-bg:#ecfdf5;--bs-btn-border-color:#b8ecd6;
+      --bs-btn-hover-color:#064e3b;--bs-btn-hover-bg:#d1fae5;--bs-btn-hover-border-color:#a7e3c9;
+      --bs-btn-active-color:#064e3b;--bs-btn-active-bg:#d1fae5;--bs-btn-active-border-color:#86d7b4}
+    .btn-danger{--bs-btn-color:#b91c1c;--bs-btn-bg:#fef2f2;--bs-btn-border-color:#fecaca;
+      --bs-btn-hover-color:#b91c1c;--bs-btn-hover-bg:#fee2e2;--bs-btn-hover-border-color:#fda4a4;
+      --bs-btn-active-color:#991b1b;--bs-btn-active-bg:#fee2e2;--bs-btn-active-border-color:#f87171}
+    .btn-dark{--bs-btn-color:#1f2937;--bs-btn-bg:#ffffff;--bs-btn-border-color:#e6eaf2;
+      --bs-btn-hover-color:#111827;--bs-btn-hover-bg:#f3f4f6;--bs-btn-hover-border-color:#d7deea;
+      --bs-btn-active-color:#111827;--bs-btn-active-bg:#e5e7eb;--bs-btn-active-border-color:#d7deea}
+    .btn-secondary{--bs-btn-color:#475569;--bs-btn-bg:#f1f5f9;--bs-btn-border-color:#e2e8f0;
+      --bs-btn-hover-color:#334155;--bs-btn-hover-bg:#e2e8f0;--bs-btn-hover-border-color:#cbd5e1;
+      --bs-btn-active-color:#334155;--bs-btn-active-bg:#cbd5e1;--bs-btn-active-border-color:#94a3b8}
+    .btn-info.text-white{color:#1e40af !important}
+    .btn-warning.text-white{color:#92400e !important}
+    .btn-success.text-white{color:#065f46 !important}
+    .btn-danger.text-white{color:#b91c1c !important}
+    .btn-dark.text-white{color:#1f2937 !important}
+    .btn-group>.btn:not(:last-child){border-top-right-radius:0;border-bottom-right-radius:0}
+    .btn-group>.btn:not(:first-child){border-top-left-radius:0;border-bottom-left-radius:0}
+
+    /* ---------- Panels & KPI cards ---------- */
+    .chart-wrapper{width:100%;overflow-y:auto;background:#fff;border:1px solid var(--line);
+      border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-card);margin-top:14px}
+    .chart-wrapper>.text-muted{font-size:.68rem;letter-spacing:.02em}
+    #chartParent{position:relative;width:100%;min-height:500px}
+    .kpi-row{align-items:stretch}
+    .kpi-row>[class*="col-"]{display:flex;flex-direction:column}
+    .kpi-group{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:18px 12px 12px;
+      box-shadow:var(--shadow-card);flex:1;display:flex;flex-direction:column;justify-content:flex-start;
+      align-items:center;position:relative;overflow:hidden;
+      transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+    .kpi-group::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;pointer-events:none;
+      background:linear-gradient(90deg,#2563eb,#db2777);opacity:.85}
+    .kpi-group:hover{border-color:#dbe2ee;box-shadow:var(--shadow-hover);transform:translateY(-1px)}
+    .kpi-group .stat-label{font-size:.55rem;color:#8fa0b8;font-weight:800;letter-spacing:.06em;
+      text-transform:uppercase;display:block}
+    .kpi-group>.stat-label{display:block;text-align:center;font-size:.67rem;font-weight:800;
+      color:var(--ink-2);letter-spacing:.1em;line-height:1.3;margin-bottom:2px;padding:0 6px;
+      text-transform:uppercase;min-height:1.74rem}
+    .counter{font-size:1.6rem;font-weight:800;line-height:1.05;margin-bottom:0;color:var(--ink)}
+    .counter-sm{font-size:1.05rem;font-weight:700;line-height:1.15;margin-bottom:0;color:#1f2937}
+    .counter,.counter-sm,.counter-t{white-space:nowrap;overflow:hidden}
+    .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .new-target-val,
+    .other-chip,#schoolsBB{transition:font-size .35s ease}
+    .kpi-hero{display:flex;align-items:center;justify-content:center;width:100%;text-align:center;
+      font-size:2.05rem;font-weight:800;letter-spacing:-.02em;line-height:1.08;overflow:hidden;
+      margin:2px 0 0;min-height:38px}
+    .kpi-sub{display:flex;width:100%;border-top:1px solid var(--line-soft);
+      margin-top:10px;padding-top:8px}
+    .kpi-sub-item{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 3px}
+    .kpi-sub-item+.kpi-sub-item{border-left:1px solid var(--line-soft)}
+    .kpi-sub-item>.stat-label{font-size:.55rem;letter-spacing:.09em;margin:0;text-transform:uppercase}
+    .kpi-foot{display:flex;align-items:center;justify-content:center;min-height:22px;margin-top:2px}
+    .new-target-val{font-size:.84rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;white-space:nowrap;line-height:1.15}
+    .kpi-sub-item .new-target-val{font-size:.66rem;font-weight:700;color:#475569}
+    .kpi-sub-note{display:block;text-align:center;font-size:.7rem;font-weight:600;color:var(--muted);margin-top:6px}
+    .other-chip{font-size:.56rem;font-weight:800;letter-spacing:.03em;color:#b45309;
+      background:#fff7ed;border:1px solid #fed7aa;border-radius:999px;padding:2px 10px;
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;margin:0}
+    .other-chip::before{content:"";width:5px;height:5px;border-radius:50%;background:#f59e0b;flex:0 0 auto}
+    .hidden{display:none !important}
+
+/* ---------- Info button + popover (% Achievement) ---------- */
+.info-btn{position:absolute;top:9px;right:9px;z-index:2;width:20px;height:20px;padding:0;border-radius:50%;
+border:1px solid var(--line);background:#fff;color:#64748b;display:inline-flex;align-items:center;justify-content:center;
+font:italic 700 .72rem/1 Georgia,"Times New Roman",serif;cursor:pointer;transition:color .15s,border-color .15s,background .15s}
+.info-btn::after{content:"";position:absolute;inset:-9px}
+.info-btn:hover,.info-btn[aria-expanded="true"]{color:#2563eb;border-color:#93b4f8;background:#eef4ff}
+.info-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.22)}
+.info-pop{position:fixed;z-index:3500;display:none;width:min(340px,calc(100vw - 24px));background:#fff;
+border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:.74rem;line-height:1.5;color:var(--ink-2);
+box-shadow:0 18px 40px -12px rgba(2,6,23,.35);text-align:left}
+.info-pop.show{display:block}
+.info-pop h6{font-size:.72rem;font-weight:800;color:#0b1f3a;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+.info-pop .formula{background:#f2f6ff;border:1px solid #dfe8f8;border-radius:8px;padding:8px 10px;margin-bottom:8px;
+font-weight:700;color:#1e3a8a;font-size:.74rem}
+.info-pop ul{margin:0;padding-left:16px}
+.info-pop li{margin-bottom:3px}
+.info-pop .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 3px 0 6px;vertical-align:baseline}
+.info-pop .pop-close{border:0;background:transparent;font-size:1rem;line-height:1;color:#94a3b8;cursor:pointer;padding:0 2px}
+.delta-note{display:block;text-align:center;font-size:.64rem;font-weight:600;line-height:1.35;margin-top:8px;padding:0 4px}
+.delta-note.is-warn{color:#b45309}
+.delta-note.is-error{color:#b91c1c}
+
+    /* ---------- Data tables ---------- */
+    .table-responsive{font-size:.74rem;background:#fff;border:1px solid var(--line);border-radius:12px;
+      max-height:none !important;overflow-x:auto !important;overflow-y:visible}
+    .table-responsive thead th{top:0;background:#f8fafc;color:var(--ink-2);z-index:10;box-shadow:none;
+      font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;
+      border-bottom:1px solid var(--line) !important;padding:.5rem .55rem}
+    .table-responsive tbody td{border-color:var(--line-soft) !important;padding:.42rem .55rem;
+      color:#334155;vertical-align:middle}
+    .table-responsive tbody tr{transition:background .12s ease}
+    .table-responsive tbody tr:hover{background:#f6f8fc}
+    .table-striped{--bs-table-striped-bg:rgba(15,23,42,.028)}
+    #tableView td,#tableView th,#breakdownTableWrapper td,#breakdownTableWrapper th{white-space:nowrap}
+    #tableLabel,#breakdownTableLabel{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;font-weight:800 !important}
+    .pagination{--bs-pagination-color:#475569;--bs-pagination-hover-color:#2563eb;
+      --bs-pagination-active-bg:#2563eb;--bs-pagination-active-border-color:#2563eb;
+      --bs-pagination-focus-color:#2563eb;--bs-pagination-border-color:var(--line);
+      --bs-pagination-focus-box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+    .pagination .page-link{font-size:.72rem;font-weight:600;border-radius:6px;margin:0 1px}
+    .pagination .page-item:first-child .page-link,.pagination .page-item:last-child .page-link{border-radius:6px}
+
+    /* ---------- Insight / Breakdown modals ---------- */
+    .insight-modal-container{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,.62);
+      z-index:3000;display:none;align-items:center;justify-content:center;padding:15px;
+      backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+    .insight-content{background:#f8fafc;width:100%;max-width:960px;max-height:95vh;overflow-y:auto;
+      border-radius:20px;position:relative;padding:28px;
+      box-shadow:0 25px 60px -15px rgba(2,6,23,.45);border:1px solid rgba(255,255,255,.75)}
+    .insight-content .border-bottom{border-color:var(--line) !important}
+    .insight-content h2{color:#0b1f3a;font-weight:800;letter-spacing:-.02em}
+    .section-header{font-size:.68rem;color:#1e293b;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+      margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:9px;
+      display:flex;align-items:center;gap:8px}
+    .section-header::before{content:"";width:3px;height:14px;border-radius:2px;flex:0 0 auto;
+      background:linear-gradient(180deg,#2563eb,#db2777)}
+    .info-card-nb{background:#fff;border:1px solid var(--line);padding:18px 20px;border-radius:14px;
+      height:100%;box-shadow:var(--shadow-card)}
+    .accent-blue{border-left:3px solid #2563eb}
+    .accent-purple{border-left:3px solid #7c3aed}
+    .accent-orange{border-top:3px solid #ea580c}
+    .accent-green{border-left:3px solid #16a34a}
+    .accent-red{border-left:3px solid #dc2626}
+    .no-print{visibility:visible}
+    .ach-bar-wrap{background:#eef1f7;border-radius:999px;height:8px;margin-top:6px;overflow:hidden}
+    .ach-bar-fill{height:100%;border-radius:999px;transition:width .5s ease}
+    .scope-breadcrumb{font-size:.7rem;color:#64748b;margin-top:3px;letter-spacing:.02em;font-weight:600}
+    .scope-breadcrumb span{color:var(--male);font-weight:800}
+    .insight-mini-table{font-size:.72rem;width:100%;border-collapse:collapse}
+    .insight-mini-table th{background:#f8fafc;padding:6px 8px;text-align:left;font-weight:800;color:#475569;
+      white-space:nowrap;font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line)}
+    .insight-mini-table td{padding:6px 8px;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+    .rank-badge{display:inline-block;width:20px;height:20px;border-radius:7px;font-size:.62rem;font-weight:800;
+      text-align:center;line-height:20px;box-shadow:0 1px 2px rgba(16,24,40,.12)}
+    .insight-content .text-warning{color:#b45309 !important}
+    #ins-narrative-box{box-shadow:0 1px 2px rgba(16,24,40,.04)}
+
+    @media (max-width:767.98px){
+      /* Tablet / small screens: keep the action buttons off the dropdown line */
+      .filter-row-main>.col{flex:0 0 auto;width:25%}
+      .filter-row-main>.col-auto{flex:0 0 auto;width:100%}
+      .filter-row-main>.col-auto .btn-group{display:flex;width:100%;flex-wrap:nowrap}
+      .filter-row-main>.col-auto .btn-group .btn{flex:1 1 0;min-width:0}
+    }
+
+    @media (max-width:575.98px){
+      .container{padding-left:8px;padding-right:8px}
+      .kpi-group{padding:16px 8px 12px;min-height:92px}
+      .kpi-row-1>.col-4,.kpi-row-3>.col-6{width:50%}
+      .kpi-row-2>.col-4{width:50%}
+      .kpi-row-2>.col-4:first-child{width:100%}
+      .kpi-row-1>.col-4:last-child{width:100%}
+      .kpi-group .stat-label{font-size:.56rem}
+      .kpi-group .counter,.kpi-group .counter-sm,.kpi-group .counter-t{white-space:nowrap}
+      .kpi-hero{font-size:clamp(1.15rem,5.2vw,1.75rem);min-height:30px}
+      .kpi-sub{margin-top:8px;padding-top:7px}
+      .kpi-sub-item>.stat-label{font-size:.5rem}
+      .kpi-sub-item .counter-sm{font-size:clamp(.8rem,3.9vw,1rem)}
+      .kpi-foot{min-height:19px}
+      .new-target-val{font-size:.8rem}
+      .kpi-sub-item .new-target-val{font-size:.62rem}
+      .filter-row{--bs-gutter-x:.25rem}
+      .filter-row .form-select{font-size:.68rem !important;padding-left:9px}
+      .filter-row .btn{padding:6px 10px;font-size:.68rem !important}
+
+      /* Primary filter bar: 2x2 grid of dropdowns, action buttons on their own full-width row */
+      .filter-row-main>.col{flex:0 0 auto;width:50%}
+      .filter-row-main>.col-auto{flex:0 0 auto;width:100%}
+      .filter-row-main>.col-auto .btn-group{display:flex;width:100%;flex-wrap:nowrap}
+      .filter-row-main>.col-auto .btn-group .btn{flex:1 1 0;min-width:0;padding:7px 6px;white-space:nowrap}
+
+      /* Secondary filter bar: each dropdown keeps its action button on the same line */
+      .filter-row-sub>.col{flex:0 0 auto;width:72%}
+      .filter-row-sub>.col-auto{flex:0 0 auto;width:28%}
+      .filter-row-sub>.col-auto .btn{width:100%;padding:6px 6px !important}
+      .filter-row-sub .filter-divider{border-left:0 !important;padding-left:calc(var(--bs-gutter-x)*.5)}
+      .kpi-group>.stat-label{white-space:normal;font-size:.55rem;letter-spacing:.08em;padding:0 3px;min-height:1.46rem;line-height:1.25}
+    }
+    @media (max-width:380px){
+      .kpi-group{padding-left:5px;padding-right:5px}
+      .kpi-group .stat-label{font-size:.52rem;letter-spacing:-.15px}
+      .kpi-hero{font-size:clamp(1.05rem,4.8vw,1.5rem);min-height:26px}
+      .kpi-sub-item .counter-sm{font-size:.78rem}
+      .kpi-sub-item .new-target-val{font-size:.58rem}
+    }
+
+  </style>
+</head>
+
+<body>
+
+<div id="insightsModal" class="insight-modal-container">
+  <div class="insight-content" id="captureArea">
+    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+      <div>
+        <h2 class="fw-bold text-dark mb-1" style="letter-spacing:-1px">Scope Intelligence</h2>
+        <div id="insightBreadcrumb" class="scope-breadcrumb"></div>
+        <span id="insightScopeLabel" class="badge bg-primary px-3 rounded-pill mt-1"></span>
+      </div>
+      <div class="d-flex gap-2 no-print">
+        <button class="btn btn-danger btn-sm fw-bold rounded-pill px-3" onclick="exportInsightPDF()">Export Full PDF</button>
+        <button class="btn-close ms-2" onclick="closeInsights()"></button>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-3">
+      <div class="col-md-5">
+        <div class="info-card-nb accent-blue h-100">
+          <div class="section-header">Enrollment Overview (M / F / T)</div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Current</small><div class="h5 fw-bold mb-0"><span id="ins-curM" style="color:#2563eb">0</span> / <span id="ins-curF" style="color:#db2777">0</span> / <span id="ins-curT" class="text-primary">0</span></div></div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Baseline</small><div class="h5 fw-bold mb-0"><span id="ins-baseM" style="color:#2563eb">0</span> / <span id="ins-baseF" style="color:#db2777">0</span> / <span id="ins-baseT">0</span></div></div>
+          <div class="mb-2 border-bottom pb-1"><small class="stat-label">Target</small><div class="h5 fw-bold mb-0"><span id="ins-tarM" style="color:#2563eb">0</span> / <span id="ins-tarF" style="color:#db2777">0</span> / <span id="ins-tarT">0</span></div></div>
+          <div class="mb-1"><small class="stat-label">Achievement %</small><div class="h5 fw-bold mb-0"><span id="ins-achM">0%</span> / <span id="ins-achF">0%</span> / <span id="ins-achT">0%</span></div></div>
+          <div class="mt-3">
+            <div class="d-flex justify-content-between" style="font-size:0.65rem;color:#64748b;"><span>Achievement (Total)</span><span id="ins-ach-bar-label">0%</span></div>
+            <div class="ach-bar-wrap"><div id="ins-ach-bar" class="ach-bar-fill" style="width:0%;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-7">
+        <div class="info-card-nb accent-purple h-100">
+          <div class="section-header">School Health Distribution (<span id="ins-sch-total">0</span> schools)</div>
+          <div class="row align-items-center">
+            <div class="col-7" style="position:relative;height:160px;"><canvas id="insightDonut"></canvas></div>
+            <div class="col-5">
+              <div class="mb-2 p-2 rounded" style="background:#fff3f3;border-left:4px solid #dc3545;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Baseline</div><div id="ins-sch-bb" class="fw-bold text-danger" style="font-size:1.4rem;">0</div></div>
+              <div class="mb-2 p-2 rounded" style="background:#fffbf0;border-left:4px solid #ffc107;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Below Target</div><div id="ins-sch-bt" class="fw-bold text-warning" style="font-size:1.4rem;">0</div></div>
+              <div class="p-2 rounded" style="background:#f0fff4;border-left:4px solid #198754;"><div style="font-size:0.6rem;color:#6c757d;font-weight:700;text-transform:uppercase;">Above Target</div><div id="ins-sch-at" class="fw-bold text-success" style="font-size:1.4rem;">0</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row g-4 mb-3">
+      <div class="col-12">
+        <div class="info-card-nb accent-green">
+          <div class="section-header">Gender Gap</div>
+          <div class="row text-center g-2">
+            <div class="col-3"><small class="stat-label">Boys</small><div id="gapM" class="fw-bold" style="color:#2563eb">0</div></div>
+            <div class="col-3"><small class="stat-label">Girls</small><div id="gapF" class="fw-bold" style="color:#db2777">0</div></div>
+            <div class="col-3"><small class="stat-label">Gap (G − B)</small><div id="gapDiff" class="fw-bold">0</div></div>
+            <div class="col-3"><small class="stat-label">GPI (G/B)</small><div id="gapGPI" class="fw-bold">–</div></div>
+          </div>
+          <p id="gapVerdict" class="mb-0 mt-2 small fw-medium text-dark"></p>
+        </div>
+      </div>
+    </div>
+    <div id="ins-dynamic-section" class="row g-4 mb-3"></div>
+    <div class="row g-4"><div class="col-12"><div id="ins-narrative-box" style="background:#f2f6ff;border:1px solid #dfe8f8;padding:18px 20px;border-radius:14px;"><p class="fw-bolder small mb-1" id="ins-narrative-title" style="color:#2563eb;">Key Observation</p><p id="ins-narrative" class="mb-0 text-dark fw-medium" style="font-size:0.9rem;"></p></div></div></div>
+</div>
+</div>
+
+<div id="breakdownModal" class="insight-modal-container">
+  <div class="insight-content" id="breakdownContent">
+    <div class="d-flex justify-content-between align-items-start mb-4 border-bottom pb-3">
+      <div>
+        <h2 class="fw-bold text-dark mb-1" style="letter-spacing:-1px" id="breakdownTitle">Breakdown View</h2>
+        <div id="breakdownBreadcrumb" class="scope-breadcrumb"></div>
+      </div>
+      <div class="d-flex gap-2 no-print">
+        <button class="btn btn-secondary btn-sm me-2" onclick="exportBreakdownCSV()">CSV</button>
+        <button class="btn btn-danger btn-sm fw-bold rounded-pill px-3" onclick="exportBreakdownPDF()">Export PDF</button>
+        <button class="btn-close ms-2" onclick="closeBreakdownModal()"></button>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end mb-2 no-print">
+      <small id="breakdownHint" class="text-muted">Stacked Male + Female current enrollment • sorted by Ach% • click a bar/row to drill down</small>
+    </div>
+
+    <div id="breakdownChartWrapper" style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:16px;margin-bottom:20px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);">
+      <div id="breakdownChartParent" style="position:relative;width:100%;min-height:500px;"><canvas id="breakdownChart"></canvas></div>
+    </div>
+
+    <div id="breakdownTableWrapper" style="background:#fff;border:1px solid #e6eaf2;border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 2px 10px -3px rgba(16,24,40,.07);">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center">
+          <select id="breakdownPageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderBreakdownTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
+          <select id="breakdownSortOrder" class="form-select form-select-sm me-1" style="width:130px;" onchange="sortBreakdownData()"><option value="achT">Sort: Ach% (T)</option><option value="achM">Sort: Ach% (M)</option><option value="achF">Sort: Ach% (F)</option><option value="name">Sort: Name</option></select>
+        </div>
+        <span id="breakdownTableLabel" class="fw-bold text-primary small">BREAKDOWN LIST</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped">
+          <thead id="breakdownTableHead"></thead>
+          <tbody id="breakdownTableBody"></tbody>
+        </table>
+      </div>
+      <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="breakdownPagination"></ul></nav>
+    </div>
+  </div>
+</div>
+
+<div class="container py-3">
+  <header class="dash-head">
+    <div class="dash-head-main">
+      <img class="dash-emblem" src="sedp.jpeg" alt="SEDP logo" width="46" height="46">
+      <div>
+        <div class="dash-kicker">School Education Department &middot; Punjab</div>
+        <h1 class="dash-title">Enrollment Monitoring Dashboard</h1>
+      </div>
+    </div>
+    <div class="dash-meta">
+      <div class="dash-meta-stack">
+        <span id="reportTimestamp" class="sync-chip is-loading">Syncing enrollment data&hellip;</span>
+        <div class="dash-credit">Gender-wise M / F / T analytics &middot; by SheeraZ</div>
+      </div>
+    </div>
+  </header>
+
+  <div id="errorBanner" class="error-banner" role="alert">
+    <span id="errorBannerMsg" class="error-banner-msg"></span>
+    <button type="button" class="btn btn-sm btn-danger" onclick="retryLoad()">Retry</button>
+  </div>
+
+  <div class="row g-2 mb-3 filter-row filter-row-main">
+    <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
+    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
+    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
+    <div class="col"><select id="markaz" class="form-select" onchange="loadData()"></select></div>
+    <div class="col-auto">
+      <div class="btn-group w-100">
+        <button class="btn btn-primary btn-sm fw-bold" onclick="loadData()">Chart</button>
+        <button class="btn btn-info btn-sm fw-bold text-white" onclick="loadTable('all')">Table</button>
+        <button class="btn btn-warning btn-sm fw-bold text-white" onclick="showInsights()">Insights</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-2 mb-3 filter-row filter-row-sub">
+    <div class="col"><select id="viewBySelect" class="form-select" style="font-size:0.75rem;"><option value="">View by...</option></select></div>
+    <div class="col-auto"><button class="btn btn-success btn-sm fw-bold" style="font-size:0.75rem;padding:6px 12px;" onclick="openBreakdownModal()">Update</button></div>
+    <div class="col filter-divider">
+      <select id="schoolFilterSelect" class="form-select" style="font-size:0.75rem;">
+        <option value="all">All Schools</option>
+        <option value="below_baseline">Below Baseline</option>
+        <option value="below_target">Below Target</option>
+        <option value="above_baseline">Above Baseline</option>
+        <option value="above_baseline_below_target">Above Baseline but Below Target</option>
+        <option value="above_target">Above Target</option>
+      </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-info btn-sm fw-bold text-white" style="font-size:0.75rem;padding:6px 12px;" onclick="applySchoolFilter()">Apply</button></div>
+  </div>
+
+  <!-- KPI Row 1: Current | Baseline | Targeted Enrollment (hero total + M/F + new-target deltas) -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-1">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Current Enrollment</span>
+        <p id="currentT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot"><span id="currentOther" class="other-chip" title="Current enrollment reported as Other by school heads">Other: 0</span></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="currentM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="currentF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline</span>
+        <p id="totalBaselineT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot" aria-hidden="true"></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="totalBaselineM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="totalBaselineF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Targeted Enrollment</span>
+        <p id="targetT" class="counter kpi-hero">0</p>
+        <div class="kpi-foot"><b id="targetNewTotal" class="new-target-val">+0</b></div>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="targetM" class="counter-sm">0</span><span id="targetNewM" class="new-target-val">+0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="targetF" class="counter-sm">0</span><span id="targetNewF" class="new-target-val">+0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Row 2: Schools | Baseline Gap | Target Gap -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-2">
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Schools</span>
+        <p id="schools" class="counter text-success">0</p>
+        <small id="schoolsBB" class="kpi-sub-note">0 below baseline</small>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Baseline Gap</span>
+        <p id="bgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="bgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="bgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Target Gap</span>
+        <p id="tgapT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="tgapM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="tgapF" class="counter-sm">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Row 3: % Achievement | Day Change -->
+  <div class="row g-3 mb-3 kpi-row kpi-row-3">
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">% Achievement</span>
+        <button type="button" id="achInfoBtn" class="info-btn" aria-label="How is % Achievement calculated?" aria-expanded="false" aria-controls="achInfoPop" onclick="toggleAchInfo(event)">i</button>
+        <p id="achT" class="counter kpi-hero">0%</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="achM" class="counter-sm">0%</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="achF" class="counter-sm">0%</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="kpi-group text-center">
+        <span class="stat-label">Day Change</span>
+        <p id="deltaT" class="counter kpi-hero">0</p>
+        <div class="kpi-sub">
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#2563eb">Male</span><span id="deltaM" class="counter-sm">0</span></div>
+          <div class="kpi-sub-item"><span class="stat-label" style="color:#db2777">Female</span><span id="deltaF" class="counter-sm">0</span></div>
+        </div>
+        <small id="deltaNote" class="delta-note hidden" role="status"></small>
+      </div>
+    </div>
+  </div>
+
+  <div id="achInfoPop" class="info-pop" role="dialog" aria-label="How % Achievement is calculated">
+    <h6><span>How % Achievement is calculated</span><button type="button" class="pop-close" aria-label="Close" onclick="closeAchInfo()">&times;</button></h6>
+    <div class="formula">Ach % = (Current &minus; Baseline) &divide; (Target &minus; Baseline) &times; 100</div>
+    <ul>
+      <li>Worked out separately for Male, Female and Total.</li>
+      <li>For a district, wing, tehsil or markaz, the summed Current, Baseline and Target of its schools are used &mdash; not an average of school percentages.</li>
+      <li>Not capped: above 100% means the target was exceeded; a negative value means enrollment fell below baseline.</li>
+      <li>If Target is not above Baseline: 100% when Current is at or above Baseline, otherwise 0%.</li>
+      <li>Total uses Total Current, which includes the &ldquo;Other&rdquo; count.</li>
+      <li>Colour: <span class="dot" style="background:#dc3545"></span>below 80% <span class="dot" style="background:#ffc107"></span>80&ndash;90% <span class="dot" style="background:#198754"></span>90% and above</li>
+    </ul>
+  </div>
+
+  <div id="tableView" class="chart-wrapper hidden">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="d-flex align-items-center">
+        <select id="pageSize" class="form-select form-select-sm me-1" style="width:60px;" onchange="renderTable()"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select>
+        <select id="sortOrder" class="form-select form-select-sm me-1" style="width:130px;" onchange="sortData()"><option value="achT">Sort: Ach% (T)</option><option value="achM">Sort: Ach% (M)</option><option value="achF">Sort: Ach% (F)</option><option value="name">Sort: Name</option><option value="emis">Sort: EMIS</option><option value="markaz">Sort: Markaz</option></select>
+        <button class="btn btn-dark btn-sm me-1" onclick="exportToCSV()">CSV</button>
+        <button class="btn btn-danger btn-sm" onclick="exportToPDF()">PDF</button>
+      </div>
+      <span id="tableLabel" class="fw-bold text-primary small">LIST</span>
+      <button class="btn btn-secondary btn-sm" onclick="showChart()">Back</button>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <nav><ul class="pagination pagination-sm justify-content-center mt-2" id="pagination"></ul></nav>
+  </div>
+
+  <div id="chartView" class="chart-wrapper">
+    <div class="d-flex justify-content-end mb-2">
+      <small class="text-muted">Stacked Male + Female current enrollment • sorted by Ach% • click a bar to drill down</small>
+    </div>
+    <div id="chartParent"><canvas id="chart"></canvas></div>
+  </div>
+</div>
+
+<script>
+/* Data rows: {d,t,m,w,emis,school,
+ * basM,curM,tarM, basF,curF,tarF, basT,curT,tarT,
+ * prevM,prevF,prevT, achM,achF,achT}  (see fetch-data.js) */
+let MASTER_DATA = [], META = null, hierarchy = {};
+let CHARTS = {};
+if (window.Chart) {
+  Chart.defaults.font.family = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+  Chart.defaults.color = "#475569";
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxWidth = 7;
+  Chart.defaults.plugins.tooltip.backgroundColor = "#0f172a";
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+  Chart.defaults.plugins.tooltip.titleFont = { family: "'Inter', system-ui, sans-serif", size: 12, weight: "700" };
+  Chart.defaults.plugins.tooltip.bodyFont = { family: "'Inter', system-ui, sans-serif", size: 11 };
+}
+let fullTableData = [], currentPage = 1, currentFilterType = "all";
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (Number(n) || 0).toLocaleString();
+const signed = (n) => { const v = Math.round(Number(n) || 0); return (v > 0 ? "+" : "") + v.toLocaleString(); };
+const achColor = (v) => v < 80 ? "#dc3545" : v < 90 ? "#ffc107" : "#198754";
+const gapColor = (v) => v >= 0 ? "#198754" : "#dc3545";
+const healthOf = (curT, basT, tarT) => curT < basT ? "#dc3545" : curT < tarT ? "#ffc107" : "#198754";
+const escQuote = (s) => String(s == null ? "" : s).replace(/'/g, "\\'");
+const escHtml = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const encKey = (k) => encodeURIComponent(k).replace(/'/g, "%27");
+
+/* Day-change reference health, set from the loader (see fetch-data.js assessDelta). */
+let DELTA = { state: "ok", reason: "", refDate: null };
+let batchScope = false;       /* true while several filters are set at once (avoids repeated redraws) */
+const MIN_RANK_GAP = 10;      /* Top/Bottom 5 lists: only entries with Target - Baseline >= this are ranked */
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fmtRefDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  return m ? parseInt(m[3], 10) + " " + MONTHS[parseInt(m[2], 10) - 1] : "an earlier day";
+}
+/* Day-change cell / text / value helpers: "N/A" when the reference is unusable. */
+function deltaCell(d) {
+  if (DELTA.state === "error") return '<td class="text-muted">\u2013</td>';
+  const p = deltaParts(d);
+  return `<td style="color:${p.color};font-weight:700">${p.icon}${fmt(Math.abs(d))}</td>`;
+}
+const deltaTxt = (v) => (DELTA.state === "error" ? "N/A" : signed(v));
+const dv = (v) => (DELTA.state === "error" ? "N/A" : v);
+function deltaParts(d) {
+  return d > 0 ? { icon: "↑", color: "#198754" } : d < 0 ? { icon: "↓", color: "#dc3545" } : { icon: "→", color: "#6c757d" };
 }
 
-const HEADER_ALIASES = {
-  district: ["district", "dname", "districtname"],
-  tehsil: ["tehsil", "tname", "tehsilname"],
-  markaz: ["markaz", "mname", "markazname"],
-  emis: ["emis", "emiscode"],
-  school: ["schoolname", "school", "sname"],
-  male_baseline: ["malebaseline", "baselineboys", "boysbaseline", "mbaseline", "mbase"],
-  male_current: ["malecurrent", "currentboys", "boyscurrent", "mcurrent", "mcurr"],
-  male_target: ["maletarget", "boystarget", "targetboys", "mtarget", "mtarg"],
-  female_baseline: ["femalebaseline", "baselinegirls", "girlsbaseline", "fbaseline", "fbase"],
-  female_current: ["femalecurrent", "currentgirls", "girlscurrent", "fcurrent", "fcurr"],
-  female_target: ["femaletarget", "girlstarget", "targetgirls", "ftarget", "ftarg"],
-  /* Baseline/Target totals are derived as M+F (they always equal the file's
-   * own totals). Total Current is taken from the file because it includes the
-   * "Other" category - see the header comment. */
-  total_baseline: ["totalbaseline", "baselinetotal", "totalbase"],
-  total_current: ["totalcurrent", "currenttotal", "currentenrolment", "currentenrollment", "totalcurr"],
-  total_target: ["totaltarget", "targettotal", "targettedenrolment", "targetedenrolment", "targetedenrollment", "targettedenrollment", "totaltarg"],
-  /* School-level Total achievement; Male/Female are always computed. */
-  ach: ["achievement", "ach", "achnt", "ntach", "achievementpct"],
-};
-
-const DERIVABLE_TOTALS = ["total_baseline", "total_current", "total_target"];
-
-/* ------------------------------------------------------------------ */
-/* Small utilities                                                     */
-/* ------------------------------------------------------------------ */
-
-function normalizeEmis(v) {
-  return String(v == null ? "" : v).trim().replace(/\.0$/, "");
+function setSyncUI(state, text) {
+  const chip = $("reportTimestamp");
+  if (!chip) return;
+  chip.classList.remove("is-loading", "is-error", "is-ok");
+  chip.onclick = null;
+  if (state === "loading") chip.classList.add("is-loading");
+  else if (state === "error") { chip.classList.add("is-error"); chip.onclick = retryLoad; }
+  else if (state === "ok") chip.classList.add("is-ok");
+  if (text != null) chip.innerText = text;
 }
-
-/** Counts: blank/dash -> 0, strip thousands separators, round to int. */
-function parseCount(v) {
-  if (v == null) return 0;
-  const s = String(v).trim().replace(/,/g, "");
-  if (s === "" || s === "-" || s === "--") return 0;
-  const n = Number(s);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+function showErrorBanner(msg) {
+  const b = $("errorBanner"), t = $("errorBannerMsg");
+  if (t) t.innerText = msg || "Could not load enrollment data.";
+  if (b) b.style.display = "flex";
 }
+function hideErrorBanner() { const b = $("errorBanner"); if (b) b.style.display = "none"; }
 
-/** Percentages: strip %/commas; unparseable -> null (caller computes). */
-function parsePct(v) {
-  if (v == null) return null;
-  const s = String(v).trim().replace(/%/g, "").replace(/,/g, "");
-  if (s === "" || s === "-") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+/* ------- KPI figure "odometer" animation -------
+   Spin phase (data still loading): every KPI figure - including the
+   "Other" count and the below-baseline note - cycles its digits inside a
+   fixed-width layout that is pre-fitted to the slot, so nothing overflows
+   or gets clipped and all figures stay the same size.
+   Roll phase (real values known): each digit rolls and then locks into its
+   final position one-by-one from left to right, so the real number
+   "magically" forms. Font size eases via CSS transition - no pop at end. */
+function kpiKind(id) {
+  if (id.indexOf("ach") === 0) return { kind: "pct" };
+  if (id.indexOf("delta") === 0) return { kind: "delta" };
+  if (id.indexOf("bgap") === 0 || id.indexOf("tgap") === 0 || id.indexOf("targetNew") === 0) return { kind: "signed" };
+  return { kind: "num" };
 }
-
-/**
- * Achievement % = (cur - bas) / (tar - bas) * 100, deliberately UNCLAMPED.
- * No-growth-asked rows (target <= baseline): staying at/above baseline = 100,
- * dropping below baseline = 0.
- */
-function computeAch(cur, bas, tar) {
-  const denom = tar - bas;
-
-  if (denom <= 0) return cur >= bas ? 100 : 0;
-
-  return ((cur - bas) / denom) * 100;
+function groupedInt(str) {
+  str = String(str);
+  const out = []; let i = str.length;
+  while (i > 0) { const from = Math.max(0, i - 3); out.unshift(str.slice(from, i)); i = from; }
+  return out.join(",");
 }
-
-/** Minimal RFC-4180-ish CSV parser (quotes, escaped quotes, CRLF). */
-function parseCSV(text) {
-  const rows = [];
-  let row = [], cur = "", q = false;
-  const t = String(text == null ? "" : text);
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i];
-    if (q) {
-      if (c === '"') {
-        if (t[i + 1] === '"') { cur += '"'; i++; }
-        else q = false;
-      } else cur += c;
-    } else if (c === '"') q = true;
-    else if (c === ",") { row.push(cur); cur = ""; }
-    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
-    else if (c === "\r") { /* skip */ }
-    else cur += c;
+function randomDigits(n) { let s = ""; for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10); return s; }
+function kpiSpinEls() {
+  return Array.from(document.querySelectorAll(
+    ".kpi-row .kpi-group .counter, .kpi-row .kpi-group .counter-sm, " +
+    ".kpi-row .kpi-group .new-target-val, .kpi-row .other-chip, #schoolsBB"
+  )).filter((el) => el.id);
+}
+function spinShape(el) {
+  const id = el.id, kind = kpiKind(id).kind;
+  const sh = { pre: "", post: "", sign: "", ints: 6, dec: 0 };
+  if (kind === "pct") { sh.ints = 2; sh.dec = 1; sh.post = "%"; }
+  else if (kind === "delta") { sh.pre = Math.random() < 0.5 ? "\u2191" : "\u2193"; sh.ints = 6; }
+  else if (kind === "signed") { sh.sign = Math.random() < 0.55 ? "+" : "-"; sh.ints = 6; }
+  else if (id === "schools") sh.ints = 5;
+  else if (id === "schoolsBB") { sh.ints = 4; sh.post = " below baseline"; }
+  else if (id === "currentOther") { sh.pre = "Other: "; sh.ints = 4; }
+  else sh.ints = 8; /* hero totals */
+  return sh;
+}
+function renderShape(sh, intStr, decStr) {
+  const ints = groupedInt(intStr);
+  const dec = sh.dec ? "." + (decStr || randomDigits(sh.dec)) : "";
+  return sh.pre + sh.sign + ints + dec + sh.post;
+}
+/* Fit an element so `text` fits its slot at the largest readable size
+   (transitions smooth any later size change). */
+function fitElToText(el, text) {
+  const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
+  if (!host || host.clientWidth <= 0) return;
+  const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+  const hero = el.classList.contains("counter");
+  const floor = window.innerWidth <= 575.98 ? (hero ? 10 : 8) : (hero ? 13 : 9);
+  el.style.fontSize = base + "px";
+  el.innerText = text;
+  const avail = Math.max(20, host.clientWidth - 2);
+  let fs = base, g = 0;
+  while (g++ < 90 && el.scrollWidth > avail && fs > floor) {
+    fs = Math.max(floor, fs - 0.2);
+    el.style.fontSize = fs + "px";
   }
-  if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
-  return rows.filter((r) => r.some((c) => String(c).trim() !== ""));
 }
 
-/** Map normalized header cells to field names. Throws listing what's off. */
-function mapColumns(headerCells) {
-  const idx = {};
-  Object.keys(HEADER_ALIASES).forEach((f) => { idx[f] = -1; });
-  headerCells.forEach((cell, i) => {
-    const n = normHeader(cell);
-    for (const field of Object.keys(HEADER_ALIASES)) {
-      if (HEADER_ALIASES[field].indexOf(n) !== -1 && idx[field] === -1) {
-        idx[field] = i;
-      }
+let spinning = false, spinRAF = 0, rollRAF = 0, lastRollSig = "";
+function startSpin() {
+  if (spinning) return;
+  spinning = true;
+  const els = kpiSpinEls();
+  els.forEach((el) => {
+    const sh = spinShape(el);
+    el.__shape = sh;
+    fitElToText(el, renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec)));
+  });
+  const step = () => {
+    if (!spinning) return;
+    els.forEach((el) => {
+      const sh = el.__shape;
+      if (!sh) return;
+      el.innerText = renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec));
+    });
+    spinRAF = requestAnimationFrame(step);
+  };
+  spinRAF = requestAnimationFrame(step);
+}
+function stopSpin() {
+  spinning = false;
+  if (spinRAF) { cancelAnimationFrame(spinRAF); spinRAF = 0; }
+}
+function reFitSpinFonts() {
+  kpiSpinEls().forEach((el) => {
+    const sh = el.__shape;
+    if (sh) fitElToText(el, renderShape(sh, randomDigits(sh.ints), randomDigits(sh.dec)));
+  });
+}
+
+/* Digit cascade into the real values currently shown in the DOM. */
+function rollKPIValues() {
+  if (rollRAF) { cancelAnimationFrame(rollRAF); rollRAF = 0; }
+  const els = kpiSpinEls();
+  if (!els.length) return;
+  const sig = els.map((el) => el.id + "=" + el.innerText).join("|");
+  if (sig === lastRollSig) return;
+  lastRollSig = sig;
+
+  const dur = 950, t0 = performance.now();
+  const tasks = els.map((el) => {
+    const finalChars = Array.from(el.innerText);
+    const finalText = finalChars.join("");
+    fitElToText(el, finalText);                 /* settle size first (eased by CSS) */
+    const digIdx = [];
+    finalChars.forEach((ch, i) => { if (/[0-9]/.test(ch)) digIdx.push(i); });
+    const startChars = finalChars.map((ch) => (/[0-9]/.test(ch) ? String(Math.floor(Math.random() * 10)) : ch));
+    el.innerText = startChars.join("");          /* randomize immediately: no real-value flash */
+    return { el, finalChars, digIdx, startChars, finalText };
+  });
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / dur);
+    tasks.forEach((task) => {
+      const out = task.finalChars.map((ch, i) => {
+        if (!/[0-9]/.test(ch)) return ch;
+        const pos = task.digIdx.indexOf(i);
+        const lockAt = task.digIdx.length ? ((pos + 1) / task.digIdx.length) * 0.92 : 1;
+        if (t >= lockAt) return ch;
+        const rollStart = parseInt(task.startChars[i], 10) || 0;
+        return String((rollStart + Math.floor((now - t0) / 12) + pos) % 10);
+      });
+      task.el.innerText = out.join("");
+    });
+    if (t < 1) { rollRAF = requestAnimationFrame(step); }
+    else {
+      tasks.forEach((task) => { task.el.innerText = task.finalText; });
+      rollRAF = 0;
+      fitKPIValues();
+    }
+  };
+  rollRAF = requestAnimationFrame(step);
+}
+
+async function loadInitialData() {
+  hideErrorBanner();
+  setSyncUI("loading", "Syncing enrollment data\u2026");
+  startSpin();
+  try {
+    const { rows, meta, report } = await GradesLoader.loadGradesData();
+    MASTER_DATA = rows; META = meta;
+    DELTA = report.delta || { state: "ok", reason: "", refDate: null };
+    hierarchy = buildHierarchy(rows);
+    setupDropdowns();
+    updateViewByDropdown();
+    const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
+    stopSpin();
+    setSyncUI("ok", `Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools`);
+    loadData();
+  } catch (e) {
+    console.error(e);
+    stopSpin();
+    setSyncUI("error", "Sync failed \u2014 click to retry");
+    showErrorBanner((e && e.message) ? e.message : "Could not load enrollment data.");
+  }
+}
+function retryLoad() { loadInitialData(); }
+window.onload = () => { loadInitialData(); };
+
+/* Size each KPI figure as large as possible while keeping its label readable.
+   Base sizes apply when figures are short; long (9-10 digit) values shrink only
+   as needed. Visual-only. */
+function fitKPIValues() {
+  document.querySelectorAll(".kpi-group .counter, .kpi-group .counter-sm, .kpi-group .new-target-val").forEach((el) => {
+    el.style.fontSize = "";
+    const host = getComputedStyle(el).display === "inline" ? el.parentElement : el;
+    if (!host || host.clientWidth <= 0) return;
+    const avail = Math.max(20, host.clientWidth - 2);
+    if (el.scrollWidth <= avail) return;
+    const hero = el.classList.contains("counter");
+    const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+    const floor = window.innerWidth <= 575.98 ? (hero ? 10 : 8) : (hero ? 13 : 9);
+    let fs = base;
+    let guard = 0;
+    while (guard++ < 80 && el.scrollWidth > avail && fs > floor) {
+      fs = Math.max(floor, fs - 0.25);
+      el.style.fontSize = fs + "px";
     }
   });
-  const missing = Object.keys(idx).filter(
-    (f) => idx[f] === -1 && DERIVABLE_TOTALS.indexOf(f) === -1 && f !== "ach"
-  );
-  if (missing.length) {
-    throw new Error(
-      "Unrecognized enrollment.csv header. Missing columns: " +
-      missing.join(", ") +
-      ". Found headers: [" + headerCells.join(" | ") + "]"
-    );
-  }
-  return idx;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+  if (spinning) reFitSpinFonts();
+  else if (!rollRAF) fitKPIValues();
+});
+
+function currentFilters() {
+  return { d: $("district").value, w: $("wing").value, t: $("tehsil").value, m: $("markaz").value };
+}
+function filterRows(f) {
+  return MASTER_DATA.filter((r) => (!f.d || r.d === f.d) && (!f.w || r.w === f.w) && (!f.t || r.t === f.t) && (!f.m || r.m === f.m));
 }
 
-function cell(row, i) {
-  return i >= 0 && i < row.length ? row[i] : "";
+function sumRows(rows) {
+  const s = { n: rows.length, basM: 0, curM: 0, tarM: 0, prevM: 0, basF: 0, curF: 0, tarF: 0, prevF: 0, basT: 0, curT: 0, tarT: 0, prevT: 0, curOther: 0 };
+  rows.forEach((r) => {
+    s.basM += r.basM; s.curM += r.curM; s.tarM += r.tarM; s.prevM += r.prevM;
+    s.basF += r.basF; s.curF += r.curF; s.tarF += r.tarF; s.prevF += r.prevF;
+    s.basT += r.basT; s.curT += r.curT; s.tarT += r.tarT; s.prevT += r.prevT; s.curOther += r.curOther || 0;
+  });
+  const C = GradesLoader.computeAch;
+  s.achM = C(s.curM, s.basM, s.tarM);
+  s.achF = C(s.curF, s.basF, s.tarF);
+  s.achT = C(s.curT, s.basT, s.tarT);
+  s.dM = s.curM - s.prevM; s.dF = s.curF - s.prevF; s.dT = s.curT - s.prevT;
+  s.ntM = s.tarM - s.basM; s.ntF = s.tarF - s.basF; s.ntT = s.tarT - s.basT;
+  return s;
 }
 
-/* ------------------------------------------------------------------ */
-/* Wing resolution                                                     */
-/* ------------------------------------------------------------------ */
-
-const RE_FEMALE = /(female|women|girl|girls)|\(\s*f\s*\)/;
-const RE_MALE = /(^|[^a-z])(male|men|boy|boys)([^a-z]|$)|\(\s*m\s*\)/;
-
-/** Grades wing labels we trust. Male / Female / Unknown (and anything else) are dropped. */
-const ALLOWED_WINGS = { SE: true, "M-EE": true, "W-EE": true };
-
-function resolveWing(emis, markaz, wingMap) {
-  if (wingMap) {
-    const hit = wingMap[emis];
-    if (hit != null && String(hit).trim() !== "") return String(hit).trim();
-  }
-  const m = " " + String(markaz || "").toLowerCase() + " ";
-  if (RE_FEMALE.test(m)) return "Female"; /* BEFORE male: "female" contains "male" */
-  if (RE_MALE.test(m)) return "Male";
-  return "Unknown";
+function blankGroup(name) {
+  return { name, n: 0, basM: 0, curM: 0, tarM: 0, prevM: 0, basF: 0, curF: 0, tarF: 0, prevF: 0, basT: 0, curT: 0, tarT: 0, prevT: 0 };
+}
+function accGroup(g, r) {
+  g.basM += r.basM; g.curM += r.curM; g.tarM += r.tarM; g.prevM += r.prevM;
+  g.basF += r.basF; g.curF += r.curF; g.tarF += r.tarF; g.prevF += r.prevF;
+  g.basT += r.basT; g.curT += r.curT; g.tarT += r.tarT; g.prevT += r.prevT;
+  g.n++;
+}
+function finalizeGroup(g) {
+  const C = GradesLoader.computeAch;
+  g.achM = C(g.curM, g.basM, g.tarM);
+  g.achF = C(g.curF, g.basF, g.tarF);
+  g.achT = C(g.curT, g.basT, g.tarT);
+  g.dM = g.curM - g.prevM; g.dF = g.curF - g.prevF; g.dT = g.curT - g.prevT;
+  g.color = healthOf(g.curT, g.basT, g.tarT);
+  return g;
+}
+function schoolRow(r) {
+  return {
+    name: r.school, emis: r.emis, markaz: r.m, dist: r.d, teh: r.t, wing: r.w,
+    basM: r.basM, curM: r.curM, tarM: r.tarM, basF: r.basF, curF: r.curF, tarF: r.tarF,
+    basT: r.basT, curT: r.curT, tarT: r.tarT,
+    dM: r.curM - r.prevM, dF: r.curF - r.prevF, dT: r.curT - r.prevT,
+    achM: r.achM, achF: r.achF, achT: r.achT,
+    color: healthOf(r.curT, r.basT, r.tarT),
+  };
 }
 
-/* ------------------------------------------------------------------ */
-/* Day-change reference health                                         */
-/* ------------------------------------------------------------------ */
-
-/* More than this share of schools missing from the previous-day snapshot
- * means the reference is incomplete and the day change cannot be trusted. */
-const MAX_MISSING_PREV_RATIO = 0.02;
-
-function pktToday() {
-  return new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+function buildHierarchy(data) {
+  const h = {};
+  data.forEach((r) => {
+    if (!h[r.d]) h[r.d] = {};
+    if (!h[r.d][r.w]) h[r.d][r.w] = {};
+    if (!h[r.d][r.w][r.t]) h[r.d][r.w][r.t] = [];
+    if (!h[r.d][r.w][r.t].includes(r.m)) h[r.d][r.w][r.t].push(r.m);
+  });
+  return h;
 }
 
-function assessDelta(prevText, prevOk, missingPrev, total, meta) {
-  if (!prevText) {
-    return { state: "error", reason: "Previous-day enrollment was not fetched (file missing)." };
-  }
-  if (!prevOk) {
-    return { state: "error", reason: "Previous-day enrollment was not fetched properly (file unreadable)." };
-  }
-  if (total > 0 && missingPrev / total > MAX_MISSING_PREV_RATIO) {
-    return {
-      state: "error",
-      reason: "Previous-day enrollment is incomplete (" + missingPrev.toLocaleString() +
-        " of " + total.toLocaleString() + " schools missing).",
-    };
-  }
-  const refDate = meta && meta.ref_date_pkt ? String(meta.ref_date_pkt) : null;
-  if (refDate && refDate !== pktToday()) {
-    return { state: "warn", refDate, reason: "Today's reference snapshot has not been fetched yet." };
-  }
-  return { state: "ok", refDate };
+
+
+function setupDropdowns() {
+  const distSelect = $("district");
+  distSelect.innerHTML = '<option value="">All Districts</option>';
+  Object.keys(hierarchy).sort().forEach((d) => distSelect.innerHTML += `<option value="${d}">${d}</option>`);
+  updateWing();
 }
 
-/* ------------------------------------------------------------------ */
-/* Main loader                                                         */
-/* ------------------------------------------------------------------ */
-
-async function fetchText(path, required) {
-  let resp;
-  try {
-    resp = await fetch(path, { cache: "no-store" });
-  } catch (e) {
-    if (required) throw new Error("Could not load " + path + " (" + e.message + ")");
-    return null;
-  }
-  if (!resp.ok) {
-    if (required) {
-      throw new Error(
-        "Missing " + path + " (HTTP " + resp.status + "). " +
-        "Run the 'Fetch Grades enrollment' workflow (or copy the Grades " +
-        "districts-enrollment export to " + path + ")."
-      );
-    }
-    return null;
-  }
-  return resp.text();
+function updateWing() {
+  const d = $("district").value, wEl = $("wing");
+  wEl.innerHTML = '<option value="">Wing</option>';
+  $("tehsil").innerHTML = '<option value="">Tehsil</option>';
+  $("markaz").innerHTML = '<option value="">Markaz</option>';
+  if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach((w) => wEl.innerHTML += `<option value="${w}">${w}</option>`);
+  else { const wings = new Set(); Object.values(hierarchy).forEach((obj) => Object.keys(obj).forEach((w) => wings.add(w))); Array.from(wings).sort().forEach((w) => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
+  updateViewByDropdown();
+  loadData();
 }
 
-function parseEnrollmentTable(text) {
-  const grid = parseCSV(text);
-  if (grid.length < 2) throw new Error("enrollment CSV has no data rows.");
-  const idx = mapColumns(grid[0]);
-  const out = [];
-  for (let r = 1; r < grid.length; r++) {
-    const row = grid[r];
-    const basM = parseCount(cell(row, idx.male_baseline));
-    const curM = parseCount(cell(row, idx.male_current));
-    const tarM = parseCount(cell(row, idx.male_target));
-    const basF = parseCount(cell(row, idx.female_baseline));
-    const curF = parseCount(cell(row, idx.female_current));
-    const tarF = parseCount(cell(row, idx.female_target));
-    out.push({
-      d: String(cell(row, idx.district)).trim(),
-      t: String(cell(row, idx.tehsil)).trim(),
-      m: String(cell(row, idx.markaz)).trim(),
-      emis: normalizeEmis(cell(row, idx.emis)),
-      school: String(cell(row, idx.school)).trim(),
-      basM, curM, tarM, basF, curF, tarF,
-      // Grades includes an "Other" category in Total Current that is not
-      // represented by the Male/Female columns. Preserve the official total
-      // and expose the difference (curOther) instead of silently discarding it.
-      basT: basM + basF,
-      curT: idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current)),
-      curOther: (idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current))) - curM - curF,
-      tarT: tarM + tarF,
-      achFile: idx.ach === -1 ? null : parsePct(cell(row, idx.ach)),
+function updateTehsil() {
+  const d = $("district").value, w = $("wing").value, tEl = $("tehsil");
+  tEl.innerHTML = '<option value="">Tehsil</option>'; if (!w) return;
+  const tehsils = new Set();
+  if (d) { if (hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach((t) => tehsils.add(t)); }
+  else { Object.values(hierarchy).forEach((dist) => { if (dist[w]) Object.keys(dist[w]).forEach((t) => tehsils.add(t)); }); }
+  Array.from(tehsils).sort().forEach((t) => tEl.innerHTML += `<option value="${t}">${t}</option>`);
+  updateViewByDropdown();
+  loadData();
+}
+
+function updateMarkaz() {
+  const d = $("district").value, w = $("wing").value, t = $("tehsil").value, mEl = $("markaz");
+  mEl.innerHTML = '<option value="">Markaz</option>'; if (!t) return;
+  const markazs = new Set();
+  if (d) { if (hierarchy[d][w][t]) hierarchy[d][w][t].forEach((m) => markazs.add(m)); }
+  else { Object.values(hierarchy).forEach((dist) => { if (dist[w] && dist[w][t]) dist[w][t].forEach((m) => markazs.add(m)); }); }
+  Array.from(markazs).sort().forEach((m) => mEl.innerHTML += `<option value="${m}">${m}</option>`);
+  updateViewByDropdown();
+  loadData();
+}
+
+/* ---------------- KPI ---------------- */
+function setTriple(prefix, m, f, t, fmtFn, colorFn) {
+  const vals = [m, f, t];
+  ["M", "F", "T"].forEach((g, i) => {
+    const el = $(prefix + g);
+    el.innerText = fmtFn(vals[i]);
+    if (colorFn) el.style.color = colorFn(vals[i]);
+  });
+}
+
+function updateKPIs(stats, rows) {
+  setTriple("current", stats.curM, stats.curF, stats.curT, fmt);
+  $("currentOther").innerText = "Other: " + fmt(stats.curOther);
+  setTriple("totalBaseline", stats.basM, stats.basF, stats.basT, fmt);
+  setTriple("target", stats.tarM, stats.tarF, stats.tarT, fmt);
+  $("targetNewTotal").innerText = signed(stats.ntT);
+  $("targetNewTotal").style.color = gapColor(stats.ntT);
+  $("targetNewM").innerText = signed(stats.ntM);
+  $("targetNewM").style.color = gapColor(stats.ntM);
+  $("targetNewF").innerText = signed(stats.ntF);
+  $("targetNewF").style.color = gapColor(stats.ntF);
+  $("schools").innerText = fmt(stats.n);
+  $("schoolsBB").innerText = fmt(rows.filter((r) => r.curT < r.basT).length) + " below baseline";
+  setTriple("bgap", stats.curM - stats.basM, stats.curF - stats.basF, stats.curT - stats.basT, signed, gapColor);
+  setTriple("tgap", stats.curM - stats.tarM, stats.curF - stats.tarF, stats.curT - stats.tarT, signed, gapColor);
+  setTriple("ach", stats.achM, stats.achF, stats.achT, (v) => v.toFixed(1) + "%", achColor);
+  if (DELTA.state === "error") {
+    ["deltaT", "deltaM", "deltaF"].forEach((id) => { const el = $(id); el.innerText = "N/A"; el.style.color = "#b91c1c"; });
+  } else {
+    setTriple("delta", stats.dM, stats.dF, stats.dT, (v) => { const p = deltaParts(v); return p.icon + signed(v); }, (v) => deltaParts(v).color);
+  }
+  const note = $("deltaNote");
+  if (DELTA.state === "ok") { note.classList.add("hidden"); note.innerText = ""; }
+  else {
+    note.classList.remove("hidden");
+    note.classList.toggle("is-error", DELTA.state === "error");
+    note.classList.toggle("is-warn", DELTA.state === "warn");
+    note.innerText = DELTA.state === "error"
+      ? "\u26A0 " + DELTA.reason + " Day change can't be shown."
+      : "\u26A0 Compared with the " + fmtRefDate(DELTA.refDate) + " midnight snapshot \u2014 today's reference has not been fetched yet.";
+  }
+  rollKPIValues();
+}
+
+/* ---------------- Chart ---------------- */
+function loadData() {
+  if (batchScope) return;
+  showChart();
+  const f = currentFilters();
+  const filtered = filterRows(f);
+  updateKPIs(sumRows(filtered), filtered);
+
+  const key = !f.d ? "d" : !f.w ? "w" : !f.t ? "t" : "m";
+  const groups = {};
+  filtered.forEach((r) => {
+    const gk = f.m ? r.school : r[key];
+    if (!groups[gk]) groups[gk] = blankGroup(gk);
+    accGroup(groups[gk], r);
+  });
+  const data = Object.values(groups).map(finalizeGroup).sort((a, b) => b.achT - a.achT);
+  renderStackedChart("main", "chart", "chartParent", data, (item) => {
+    const ff = currentFilters();
+    if (!ff.d) { $("district").value = item.name; updateWing(); }
+    else if (!ff.w) { $("wing").value = item.name; updateTehsil(); }
+    else if (!ff.t) { $("tehsil").value = item.name; updateMarkaz(); }
+    else if (!ff.m) { $("markaz").value = item.name; loadData(); }
+  });
+}
+
+function renderStackedChart(key, canvasId, parentId, data, onClick) {
+  const ctx = $(canvasId);
+  if (CHARTS[key]) CHARTS[key].destroy();
+  $(parentId).style.height = Math.max(400, data.length * 25 + 40) + "px";
+  CHARTS[key] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: data.map((g) => `${g.name} • ${g.achT.toFixed(1)}%`),
+      datasets: [
+        { label: "Male", data: data.map((g) => g.curM), backgroundColor: "#2563eb", hoverBackgroundColor: "#3b82f6", borderRadius: 3, borderSkipped: false, stack: "s" },
+        { label: "Female", data: data.map((g) => g.curF), backgroundColor: "#db2777", hoverBackgroundColor: "#ec4899", borderRadius: 3, borderSkipped: false, stack: "s" },
+      ],
+    },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, border: { display: false }, grid: { color: "rgba(15,23,42,0.05)" }, ticks: { color: "#64748b", font: { size: 10 } }, title: { display: true, text: "Current enrollment", color: "#64748b", font: { size: 10, weight: "600" } } },
+        y: { stacked: true, grid: { display: false }, categoryPercentage: 0.6, barPercentage: 0.92, ticks: { autoSkip: false, color: "#334155", font: { size: 9, weight: "500" } } },
+      },
+      plugins: {
+        legend: { display: true, position: "top", align: "end", labels: { usePointStyle: true, boxWidth: 8, padding: 14, font: { size: 11, weight: "600" } } },
+        tooltip: { padding: 10, cornerRadius: 8,
+          callbacks: {
+            label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.x)}`,
+            footer: (items) => {
+              const g = data[items[0].dataIndex];
+              return `Total: ${fmt(g.curT)}  •  Ach ${g.achT.toFixed(1)}% (M ${g.achM.toFixed(1)} / F ${g.achF.toFixed(1)})`;
+            },
+          },
+        },
+      },
+      onClick: (event, activeElements) => {
+        if (activeElements && activeElements.length > 0 && onClick) onClick(data[activeElements[0].index]);
+      },
+    },
+  });
+}
+
+/* ---------------- Main table ---------------- */
+function loadTable(type) {
+  currentFilterType = type;
+  const f = currentFilters();
+  const labelMap = {
+    "all": "Summary List",
+    "all_schools": "All Schools List",
+    "below_baseline": "Below Baseline List",
+    "below_target": "Below Target List",
+    "above_baseline": "Above Baseline List",
+    "above_baseline_below_target": "Above Baseline But Below Target List",
+    "above_target": "Above Target List",
+  };
+  $("tableLabel").innerText = `${labelMap[type]} - ${f.m || f.t || f.w || f.d || "Punjab"}`;
+  const filtered = filterRows(f);
+
+  let tableData;
+  if (type !== "all" || f.m) {
+    tableData = filtered.map(schoolRow);
+  } else {
+    const key = !f.d ? "d" : !f.w ? "w" : !f.t ? "t" : "m";
+    const groups = {};
+    filtered.forEach((r) => {
+      const gk = r[key];
+      if (!groups[gk]) groups[gk] = blankGroup(gk);
+      accGroup(groups[gk], r);
+    });
+    tableData = Object.values(groups).map(finalizeGroup);
+  }
+
+  /* Filters always decide on Totals (M/F/T all displayed). */
+  if (type === "below_baseline") tableData = tableData.filter((s) => s.curT < s.basT);
+  else if (type === "below_target") tableData = tableData.filter((s) => s.curT < s.tarT);
+  else if (type === "above_baseline") tableData = tableData.filter((s) => s.curT >= s.basT);
+  else if (type === "above_baseline_below_target") tableData = tableData.filter((s) => s.curT >= s.basT && s.curT < s.tarT);
+  else if (type === "above_target") tableData = tableData.filter((s) => s.curT >= s.tarT);
+
+  fullTableData = tableData;
+  sortData(); showTable(); updateKPIs(sumRows(filtered), filtered);
+}
+
+function sortData() {
+  const val = $("sortOrder").value;
+  fullTableData.sort((a, b) => {
+    if (val === "name") return a.name.localeCompare(b.name);
+    if (val === "emis") return (a.emis || "").localeCompare(b.emis || "");
+    if (val === "markaz") return (a.markaz || "").localeCompare(b.markaz || "");
+    if (val === "achM") return b.achM - a.achM;
+    if (val === "achF") return b.achF - a.achF;
+    return b.achT - a.achT;
+  });
+  currentPage = 1; renderTable();
+}
+
+function genderHeadHTML(nameHead) {
+  const sub = '<th style="color:#2563eb">M</th><th style="color:#db2777">F</th><th>T</th>';
+  return `<tr><th rowspan="2">Sr.</th><th rowspan="2">${nameHead}</th>` +
+    `<th colspan="3" class="text-center border-start">Base</th><th colspan="3" class="text-center border-start">Curr</th>` +
+    `<th colspan="3" class="text-center border-start">Δ</th><th colspan="3" class="text-center border-start">Targ</th>` +
+    `<th colspan="3" class="text-center border-start">Ach%</th></tr><tr>${sub}${sub}${sub}${sub}${sub}</tr>`;
+}
+
+function genderRowHTML(s, srNo, nameHTML) {
+  return `<tr><td>${srNo}</td><td>${nameHTML}</td>` +
+    `<td>${fmt(s.basM)}</td><td>${fmt(s.basF)}</td><td class="fw-bold">${fmt(s.basT)}</td>` +
+    `<td>${fmt(s.curM)}</td><td>${fmt(s.curF)}</td><td class="fw-bold">${fmt(s.curT)}</td>` +
+    deltaCell(s.dM) + deltaCell(s.dF) + deltaCell(s.dT) +
+    `<td>${fmt(s.tarM)}</td><td>${fmt(s.tarF)}</td><td class="fw-bold">${fmt(s.tarT)}</td>` +
+    `<td class="fw-bold" style="color:${achColor(s.achM)}">${s.achM.toFixed(1)}%</td>` +
+    `<td class="fw-bold" style="color:${achColor(s.achF)}">${s.achF.toFixed(1)}%</td>` +
+    `<td class="fw-bold" style="color:${achColor(s.achT)}">${s.achT.toFixed(1)}%</td></tr>`;
+}
+
+function renderTable() {
+  const size = parseInt($("pageSize").value), start = (currentPage - 1) * size, pageData = fullTableData.slice(start, start + size);
+  const isSchool = currentFilterType !== "all" || $("markaz").value;
+  $("tableHead").innerHTML = genderHeadHTML(isSchool ? "School / Markaz" : "Name");
+  let html = "";
+  pageData.forEach((s, i) => {
+    const nameHTML = s.emis ? `<small class="text-muted">${s.emis}</small> | <small class="text-primary">${s.markaz}</small><br><strong>${s.name}</strong>` : `<strong>${s.name}</strong>`;
+    html += genderRowHTML(s, start + i + 1, nameHTML);
+  });
+  $("tableBody").innerHTML = html; renderPagination();
+}
+
+function renderPagination() {
+  const total = Math.ceil(fullTableData.length / parseInt($("pageSize").value));
+  let html = ""; for (let i = Math.max(1, currentPage - 2); i <= Math.min(total, currentPage + 2); i++) { html += `<li class="page-item ${i === currentPage ? "active" : ""}"><a class="page-link" onclick="goToPage(${i})">${i}</a></li>`; }
+  $("pagination").innerHTML = html;
+}
+
+function goToPage(p) { currentPage = p; renderTable(); }
+function showTable() { $("chartView").classList.add("hidden"); $("tableView").classList.remove("hidden"); }
+function showChart() { $("chartView").classList.remove("hidden"); $("tableView").classList.add("hidden"); }
+
+/* ---------------- Insights ---------------- */
+function showInsights() {
+  const f = currentFilters();
+  let scopeLevel = 0;
+  if (f.d) scopeLevel = 1; if (f.d && f.w) scopeLevel = 2;
+  if (f.d && f.w && f.t) scopeLevel = 3; if (f.d && f.w && f.t && f.m) scopeLevel = 4;
+  const bcParts = ["<span>Punjab</span>"];
+  if (f.d) bcParts.push(`<span>${f.d}</span>`); if (f.w) bcParts.push(`<span>${f.w}</span>`);
+  if (f.t) bcParts.push(`<span>${f.t}</span>`); if (f.m) bcParts.push(`<span>${f.m}</span>`);
+  $("insightBreadcrumb").innerHTML = bcParts.join(" &rarr; ");
+  $("insightScopeLabel").innerText = f.m || f.t || f.w || f.d || "PUNJAB";
+
+  const filtered = filterRows(f);
+  const stats = sumRows(filtered);
+  let bb = 0, bt = 0, at = 0;
+  filtered.forEach((r) => { if (r.curT < r.basT) bb++; else if (r.curT < r.tarT) bt++; else at++; });
+
+  $("ins-curM").innerText = fmt(stats.curM); $("ins-curF").innerText = fmt(stats.curF); $("ins-curT").innerText = fmt(stats.curT);
+  $("ins-baseM").innerText = fmt(stats.basM); $("ins-baseF").innerText = fmt(stats.basF); $("ins-baseT").innerText = fmt(stats.basT);
+  $("ins-tarM").innerText = fmt(stats.tarM); $("ins-tarF").innerText = fmt(stats.tarF); $("ins-tarT").innerText = fmt(stats.tarT);
+  [["ins-achM", stats.achM], ["ins-achF", stats.achF], ["ins-achT", stats.achT]].forEach(([id, v]) => {
+    $(id).innerText = v.toFixed(1) + "%"; $(id).style.color = achColor(v);
+  });
+
+  $("ins-sch-total").innerText = filtered.length;
+  $("ins-sch-bb").innerText = bb; $("ins-sch-bt").innerText = bt; $("ins-sch-at").innerText = at;
+  $("ins-ach-bar").style.width = Math.min(Math.max(stats.achT, 0), 100) + "%";
+  $("ins-ach-bar").style.background = achColor(stats.achT);
+  $("ins-ach-bar-label").innerText = stats.achT.toFixed(1) + "%";
+
+  /* Gender gap card */
+  const gap = stats.curF - stats.curM;
+  const gpi = stats.curM ? stats.curF / stats.curM : null;
+  $("gapM").innerText = fmt(stats.curM);
+  $("gapF").innerText = fmt(stats.curF);
+  $("gapDiff").innerText = signed(gap);
+  $("gapDiff").style.color = gap === 0 ? "#6c757d" : gap > 0 ? "#db2777" : "#2563eb";
+  $("gapGPI").innerText = gpi == null ? "–" : gpi.toFixed(2);
+  const adiff = stats.achF - stats.achM;
+  let verdict;
+  if (!stats.curM && !stats.curF) verdict = "No enrollment recorded in this scope.";
+  else if (gap === 0) verdict = "Boys and girls are at parity in current enrollment.";
+  else verdict = (gap > 0 ? `Girls lead boys by ${fmt(gap)} (GPI ${gpi.toFixed(2)}).` : `Boys lead girls by ${fmt(-gap)} (GPI ${gpi.toFixed(2)}).`);
+  if (Math.abs(adiff) >= 1) verdict += adiff > 0 ? ` Girls lead achievement by ${adiff.toFixed(1)}pp.` : ` Boys lead achievement by ${(-adiff).toFixed(1)}pp.`;
+  else verdict += " Both genders progress evenly.";
+  $("gapVerdict").innerText = verdict;
+
+  if (CHARTS.donut) CHARTS.donut.destroy();
+  CHARTS.donut = new Chart($("insightDonut"), {
+    type: "doughnut", data: { labels: ["Below Baseline", "Below Target", "Above Target"], datasets: [{ data: [bb, bt, at], backgroundColor: ["#dc3545", "#ffc107", "#198754"], borderColor: "#ffffff", borderWidth: 3, hoverOffset: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { display: false } } },
+  });
+
+  buildDynamicSection(scopeLevel, filtered, f, stats, bb);
+  $("insightsModal").style.display = "flex";
+}
+
+function buildDynamicSection(scopeLevel, filtered, f, stats, schoolsBB) {
+  const container = $("ins-dynamic-section"); container.innerHTML = "";
+
+  function aggregateBy(field) {
+    const groups = {};
+    filtered.forEach((r) => {
+      const key = r[field]; if (!key) return;
+      if (!groups[key]) groups[key] = blankGroup(key);
+      accGroup(groups[key], r);
+    });
+    return Object.values(groups).map(finalizeGroup).sort((a, b) => a.achT - b.achT);
+  }
+
+  /* Markaz names repeat across tehsils/wings, so a markaz is keyed by wing + tehsil + name.
+     `sub` carries the context that the current scope does not already fix. */
+  function aggregateMarkaz() {
+    const groups = {};
+    filtered.forEach((r) => {
+      const key = r.w + "||" + r.t + "||" + r.m;
+      if (!groups[key]) {
+        groups[key] = blankGroup(r.m);
+        groups[key].sub = [!f.t ? r.t : "", !f.w ? r.w : "", !f.d ? r.d : ""].filter(Boolean).join(" \u00b7 ");
+      }
+      accGroup(groups[key], r);
+    });
+    return Object.values(groups).map(finalizeGroup);
+  }
+
+  function schoolItems() {
+    return filtered.map(schoolRow).map((s) => {
+      s.sub = [s.markaz, !f.t ? s.teh : "", !f.d ? s.dist : ""].filter(Boolean).join(" \u00b7 ");
+      return s;
     });
   }
-  return out.filter((s) => s.d !== "" || s.emis !== "");
+
+  function nameCell(name, sub) {
+    return `<strong>${escHtml(name)}</strong>` + (sub ? `<br><small class="text-muted">${escHtml(sub)}</small>` : "");
+  }
+
+  function miniTable(title, rows, accentClass, showSchoolCount) {
+    const rowsHtml = rows.map((r, i) => {
+      return `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i + 1}</span></td><td>${nameCell(r.name, r.sub)}</td>${showSchoolCount ? `<td>${r.n}</td>` : ""}<td>${fmt(r.curM)}</td><td>${fmt(r.curF)}</td><td class="fw-bold">${fmt(r.curT)}</td>${deltaCell(r.dT)}<td style="font-weight:700;color:${achColor(r.achT)};">${r.achT.toFixed(1)}%</td></tr>`;
+    }).join("");
+    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th>${showSchoolCount ? "<th>Sch</th>" : ""}<th>M</th><th>F</th><th>T</th><th>\u0394</th><th>Ach%</th></tr></thead><tbody>${rowsHtml}</tbody></table></div></div>`;
+  }
+
+  /* Top / Bottom list card: Base -> Current -> Target next to Ach% so outliers explain themselves. */
+  function rankTable(title, rows, accentClass, note) {
+    const body = rows.length ? rows.map((r, i) =>
+      `<tr><td><span class="rank-badge" style="background:${r.color};color:white;">${i + 1}</span></td><td style="white-space:normal;min-width:130px;">${nameCell(r.name, r.sub)}</td><td>${fmt(r.basT)} \u2192 <strong>${fmt(r.curT)}</strong> \u2192 ${fmt(r.tarT)}</td>${deltaCell(r.dT)}<td style="font-weight:700;color:${achColor(r.achT)};">${r.achT.toFixed(1)}%</td></tr>`
+    ).join("") : `<tr><td colspan="5" class="text-muted">No entries qualify for ranking.</td></tr>`;
+    return `<div class="info-card-nb ${accentClass} h-100"><div class="section-header">${title}</div><div class="table-responsive"><table class="insight-mini-table"><thead><tr><th>#</th><th>Name</th><th>Base \u2192 Curr \u2192 Targ</th><th>\u0394</th><th>Ach%</th></tr></thead><tbody>${body}</tbody></table></div><div class="text-muted mt-2" style="font-size:.62rem;">${note}</div></div>`;
+  }
+
+  function rankPair(label, noun, items) {
+    const pool = items.filter((x) => x.tarT - x.basT >= MIN_RANK_GAP).sort((a, b) => b.achT - a.achT);
+    const n = pool.length, topN = Math.min(5, Math.ceil(n / 2)), botN = Math.min(5, n - topN);
+    const top = pool.slice(0, topN);
+    const bottom = pool.slice(n - botN).reverse();
+    const note = `Ranked by Ach% among ${noun} with Target \u2212 Baseline \u2265 ${MIN_RANK_GAP} (${fmt(n)} of ${fmt(items.length)} qualify).`;
+    return `<div class="col-md-6">${rankTable(`Bottom ${botN || 5} ${label}`, bottom, "accent-red", note)}</div><div class="col-md-6">${rankTable(`Top ${topN || 5} ${label}`, top, "accent-green", note)}</div>`;
+  }
+
+  let html = "", criticalInfo = "";
+  const totalDelta = stats.dT;
+  const deltaMsg = totalDelta > 0 ? `increased by ${fmt(totalDelta)}` : totalDelta < 0 ? `decreased by ${fmt(Math.abs(totalDelta))}` : "remained stagnant";
+  const deltaSentence = DELTA.state === "error"
+    ? `${fmt(filtered.length)} schools in scope.`
+    : `Enrollment ${deltaMsg} ${DELTA.state === "warn" ? "since the " + fmtRefDate(DELTA.refDate) + " snapshot" : "today"} across ${filtered.length} schools.`;
+  const critName = (g) => g.name + (g.sub ? ` (${g.sub})` : "");
+
+  if (scopeLevel === 0) {
+    const districts = aggregateBy("d");
+    html += `<div class="col-md-6">${miniTable("Bottom 5 Districts", districts.slice(0, 5), "accent-red", true)}</div><div class="col-md-6">${miniTable("Top 5 Districts", [...districts].sort((a, b) => b.achT - a.achT).slice(0, 5), "accent-green", true)}</div>`;
+    html += rankPair("Markaz", "markaz", aggregateMarkaz()) + rankPair("Schools", "schools", schoolItems());
+    criticalInfo = `District ${districts[0].name} is most critical at ${districts[0].achT.toFixed(1)}%.`;
+  } else if (scopeLevel === 1) {
+    const wings = aggregateBy("w"), tehsils = aggregateBy("t");
+    html += `<div class="col-md-5">${miniTable("Wings Breakdown", wings, "accent-blue", true)}</div><div class="col-md-7">${miniTable(`All Tehsils (${tehsils.length})`, tehsils, "accent-blue", true)}</div>`;
+    html += rankPair("Markaz", "markaz", aggregateMarkaz()) + rankPair("Schools", "schools", schoolItems());
+    criticalInfo = `${tehsils.length} tehsils. Tehsil ${tehsils[0].name} is most critical at ${tehsils[0].achT.toFixed(1)}%.`;
+  } else if (scopeLevel === 2) {
+    const tehsils = aggregateBy("t"), markazs = aggregateMarkaz().sort((a, b) => a.achT - b.achT);
+    html += `<div class="col-12">${miniTable(`Tehsil Breakdown (${tehsils.length})`, tehsils, "accent-blue", true)}</div>`;
+    html += rankPair("Markaz", "markaz", markazs) + rankPair("Schools", "schools", schoolItems());
+    criticalInfo = `${markazs.length} markaz. Markaz ${critName(markazs[0])} is most critical at ${markazs[0].achT.toFixed(1)}%.`;
+  } else if (scopeLevel === 3) {
+    const markazs = aggregateMarkaz().sort((a, b) => a.achT - b.achT);
+    html += `<div class="col-12">${miniTable(`Markaz Performance (${markazs.length})`, markazs, "accent-blue", true)}</div>`;
+    html += rankPair("Schools", "schools", schoolItems());
+    criticalInfo = `Markaz ${markazs[0].name} is most critical at ${markazs[0].achT.toFixed(1)}%.`;
+  } else if (scopeLevel === 4) {
+    const schools = filtered.map(schoolRow).sort((a, b) => a.achT - b.achT);
+    html += `<div class="col-12"><div class="info-card-nb accent-orange"><div class="section-header">All Schools in Markaz</div><div class="table-responsive" style="max-height:280px;overflow-y:auto;"><table class="insight-mini-table"><thead style="position:sticky;top:0;background:#f8fafc;"><tr><th>School</th><th>Base T</th><th>M</th><th>F</th><th>T</th><th>\u0394 T</th><th>Targ T</th><th>Ach M</th><th>Ach F</th><th>Ach T</th></tr></thead><tbody>${schools.map((s) => {
+      return `<tr><td><small>${escHtml(s.emis)}</small><br><strong>${escHtml(s.name)}</strong></td><td>${fmt(s.basT)}</td><td>${fmt(s.curM)}</td><td>${fmt(s.curF)}</td><td class="fw-bold">${fmt(s.curT)}</td>${deltaCell(s.dT)}<td>${fmt(s.tarT)}</td><td style="font-weight:700;color:${achColor(s.achM)};">${s.achM.toFixed(1)}%</td><td style="font-weight:700;color:${achColor(s.achF)};">${s.achF.toFixed(1)}%</td><td style="font-weight:700;color:${achColor(s.achT)};">${s.achT.toFixed(1)}%</td></tr>`;
+    }).join("")}</tbody></table></div></div></div>`;
+    criticalInfo = `Most critical school is ${schools[0].name} at ${schools[0].achT.toFixed(1)}%.`;
+  }
+
+  container.innerHTML = html;
+  const scopeTitle = f.m || f.t || f.w || f.d || "Punjab";
+  $("ins-narrative-title").innerText = stats.achT < 80 ? "Critical Alert" : stats.achT < 90 ? "Needs Improvement" : "Good Performance";
+  $("ins-narrative-box").style.background = stats.achT < 80 ? "#fff5f5" : stats.achT < 90 ? "#fffbeb" : "#f0fdf4";
+  const gap = stats.curF - stats.curM;
+  const gpiTxt = stats.curM ? ` (GPI ${(stats.curF / stats.curM).toFixed(2)})` : "";
+  const genderMsg = !stats.curM && !stats.curF ? "No enrollment recorded." : gap === 0 ? "Boys and girls are at parity." : gap > 0 ? `Girls lead boys by ${fmt(gap)}${gpiTxt}.` : `Boys lead girls by ${fmt(-gap)}${gpiTxt}.`;
+  $("ins-narrative").innerText = `${scopeTitle}: ${stats.achT.toFixed(1)}% achievement (M ${stats.achM.toFixed(1)}% / F ${stats.achF.toFixed(1)}%). ${deltaSentence} ${criticalInfo} ${genderMsg}`;
 }
 
-async function loadGradesData() {
-  const currentText = await fetchText(GRADES_PATHS.current, true);
-  const [prevText, wingText, metaText] = await Promise.all([
-    fetchText(GRADES_PATHS.prev, false),
-    fetchText(GRADES_PATHS.wing, false),
-    fetchText(GRADES_PATHS.meta, false),
-  ]);
+function closeInsights() { $("insightsModal").style.display = "none"; }
 
-  /* The day's midnight reference snapshot, keyed by EMIS (same layout as
-     current). Syncs through the day leave it pinned so Δ = since midnight. */
-  let prevMap = {};
-  let prevOk = false;
-  if (prevText) {
-    try {
-      parseEnrollmentTable(prevText).forEach((s) => {
-        if (s.emis) prevMap[s.emis] = { curM: s.curM, curF: s.curF, curT: s.curT };
-      });
-      prevOk = Object.keys(prevMap).length > 0;
-    } catch (e) {
-      console.warn("[grades] ignoring unreadable prev snapshot:", e.message);
-    }
-  }
+/* ---------------- Main-table exports ---------------- */
+function exportToPDF() {
+  const { jsPDF } = window.jspdf;
+  if (!fullTableData || fullTableData.length === 0) { alert("Please load a table first before exporting."); return; }
+  const doc = new jsPDF("l", "mm", "a4");
+  doc.setFontSize(16); doc.setTextColor(30, 58, 95);
+  doc.text($("tableLabel").innerText, 14, 12);
+  doc.setFontSize(8); doc.setTextColor(100);
+  doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 17);
+  doc.text("SED Punjab Enrollment Monitoring by SheeraZ (M/F/T gender-wise; full detail in CSV)", 14, 21);
 
-  let wingMap = {};
-  if (wingText) {
-    try { wingMap = JSON.parse(wingText) || {}; }
-    catch (e) { console.warn("[grades] ignoring unreadable wing map:", e.message); }
-  }
+  const isSchoolTable = fullTableData[0].emis !== undefined;
+  /* Landscape PDF keeps the key gender columns; the CSV carries every column. */
+  const head = isSchoolTable
+    ? [["Sr.", "EMIS", "School Name", "Markaz", "Base T", "Cur M", "Cur F", "Cur T", "Δ T", "Targ T", "Ach T%"]]
+    : [["Sr.", "Name", "Base T", "Cur M", "Cur F", "Cur T", "Δ T", "Targ T", "Ach T%"]];
+  const body = fullTableData.map((s, i) => {
+    const core = [s.basT.toLocaleString(), s.curM.toLocaleString(), s.curF.toLocaleString(), s.curT.toLocaleString(), deltaTxt(s.dT), s.tarT.toLocaleString(), s.achT.toFixed(1) + "%"];
+    return isSchoolTable ? [i + 1, s.emis, s.name, s.markaz, ...core] : [i + 1, s.name, ...core];
+  });
+  const achIdx = isSchoolTable ? 10 : 8, gapIdx = isSchoolTable ? 8 : 6;
+  doc.autoTable({
+    startY: 26, head, body, theme: "striped", styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [30, 58, 95], textColor: 255 },
+    didParseCell: function (data) {
+      if (data.section === "body" && data.column.index === achIdx) {
+        const val = parseFloat(data.cell.raw);
+        data.cell.styles.textColor = val < 80 ? [220, 53, 69] : val < 90 ? [253, 126, 20] : [25, 135, 84];
+      }
+      if (data.section === "body" && data.column.index === gapIdx) {
+        const val = parseInt(String(data.cell.raw).replace(/[^0-9-]/g, ""), 10);
+        if (val > 0) data.cell.styles.textColor = [25, 135, 84];
+        else if (val < 0) data.cell.styles.textColor = [220, 53, 69];
+      }
+    },
+  });
+  doc.save(getExportFileName("pdf"));
+}
 
-  let meta = null;
-  if (metaText) {
-    try { meta = JSON.parse(metaText); } catch (e) { /* ignore */ }
-  }
+function exportToCSV() {
+  const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
+  const header = "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Base M,Base F,Base T,Current M,Current F,Current T,Delta M,Delta F,Delta T,Target M,Target F,Target T,Ach M%,Ach F%,Ach T%\n";
+  const headerG = "Sr.,Name,Base M,Base F,Base T,Current M,Current F,Current T,Delta M,Delta F,Delta T,Target M,Target F,Target T,Ach M%,Ach F%,Ach T%\n";
+  let csv = isSchool ? header : headerG;
+  fullTableData.forEach((s, i) => {
+    const core = `${s.basM},${s.basF},${s.basT},${s.curM},${s.curF},${s.curT},${dv(s.dM)},${dv(s.dF)},${dv(s.dT)},${s.tarM},${s.tarF},${s.tarT},${s.achM.toFixed(2)}%,${s.achF.toFixed(2)}%,${s.achT.toFixed(2)}%`;
+    csv += isSchool
+      ? `"${i + 1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name.replace(/"/g, '""')}",${core}\n`
+      : `"${i + 1}","${s.name.replace(/"/g, '""')}",${core}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" }), link = document.createElement("a");
+  link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
+}
 
-  const parsed = parseEnrollmentTable(currentText);
-  let missingPrev = 0, unknownWing = 0, droppedWing = 0;
-  const wingValues = {};
-  const rows = [];
-  parsed.forEach((s) => {
-    s.w = resolveWing(s.emis, s.m, wingMap);
-    if (s.w === "Unknown") unknownWing++;
-    if (!ALLOWED_WINGS[s.w]) {
-      droppedWing++;
-      return;
-    }
-    const p = prevMap[s.emis];
-    if (p) { s.prevM = p.curM; s.prevF = p.curF; s.prevT = p.curT; }
-    /* Not in the reference (e.g. a brand-new school): treat as unchanged so a
-       missing row never shows up as a full-enrollment "increase". */
-    else { s.prevM = s.curM; s.prevF = s.curF; s.prevT = s.curT; missingPrev++; }
-    wingValues[s.w] = (wingValues[s.w] || 0) + 1;
-    /* Single % metric: same unclamped formula for Total, M and F. */
-    s.achT = computeAch(s.curT, s.basT, s.tarT);
-    s.achM = computeAch(s.curM, s.basM, s.tarM);
-    s.achF = computeAch(s.curF, s.basF, s.tarF);
-    delete s.achFile;
-    rows.push(s);
+function getExportFileName(ext) {
+  const f = currentFilters();
+  const nameParts = ["DEA"];
+  if (f.d) nameParts.push(f.d); if (f.w) nameParts.push(f.w); if (f.t) nameParts.push(f.t); if (f.m) nameParts.push(f.m);
+  const filterLabelMap = {
+    "all": "Summary", "all_schools": "AllSchools", "below_baseline": "BelowBaseline",
+    "below_target": "BelowTarget", "above_baseline": "AboveBaseline",
+    "above_baseline_below_target": "AboveBaseline_BelowTarget", "above_target": "AboveTarget",
+  };
+  return `${nameParts.join("_").replace(/\s+/g, "")}_${filterLabelMap[currentFilterType] || currentFilterType}.${ext}`;
+}
+
+/* ---------------- Breakdown modal ---------------- */
+let breakdownFullData = [], breakdownCurrentPage = 1, breakdownLevel = "";
+
+function updateViewByDropdown() {
+  const f = currentFilters(), viewSelect = $("viewBySelect");
+  viewSelect.innerHTML = '<option value="">View by...</option>';
+  viewSelect.disabled = false;
+  if (!f.d) viewSelect.innerHTML += '<option value="wing">Breakdown by Wing</option>';
+  else if (!f.w) viewSelect.innerHTML += '<option value="tehsil">Breakdown by Tehsil</option><option value="markaz">Breakdown by Markaz</option>';
+  else if (!f.t) viewSelect.innerHTML += '<option value="markaz">Breakdown by Markaz</option>';
+  else viewSelect.disabled = true;
+}
+
+function openBreakdownModal() {
+  const selectedOption = $("viewBySelect").value;
+  if (!selectedOption) { alert("Please select a breakdown option"); return; }
+
+  const f = currentFilters();
+  const filtered = MASTER_DATA.filter((r) => (!f.d || r.d === f.d) && (!f.w || r.w === f.w) && (!f.t || r.t === f.t));
+  breakdownLevel = selectedOption;
+
+  /* Markaz names repeat across tehsils/wings, so a markaz is keyed by wing + tehsil + name
+     and labelled with its tehsil (and wing when no wing is selected). */
+  const groups = {};
+  filtered.forEach((r) => {
+    let key, name;
+    if (selectedOption === "wing") { key = name = r.w; }
+    else if (selectedOption === "tehsil") { key = name = r.t; }
+    else { key = r.w + "||" + r.t + "||" + r.m; name = r.m + " \u00b7 " + r.t + (f.w ? "" : " (" + r.w + ")"); }
+    if (!groups[key]) { groups[key] = blankGroup(name); groups[key].key = key; groups[key]._wings = new Set(); groups[key]._first = r; }
+    accGroup(groups[key], r);
+    groups[key]._wings.add(r.w);
   });
 
-  const report = {
-    rows: rows.length,
-    parsed: parsed.length,
-    droppedWing,
-    missingPrev,
-    unknownWing,
-    wings: Object.keys(wingValues).sort(),
-    hasPrev: !!prevText,
-    delta: assessDelta(prevText, prevOk, missingPrev, rows.length, meta),
-    hasWingMap: Object.keys(wingMap).length > 0,
-  };
-  console.info("[grades] loaded", report);
-  if (report.delta.state !== "ok") console.warn("[grades] day change " + report.delta.state + ": " + report.delta.reason);
-  if (droppedWing) {
-    console.warn("[grades] dropped " + droppedWing +
-      " schools whose Wing is not SE / M-EE / W-EE (Male, Female, Unknown, etc.).");
-  }
-  return { rows, meta, report };
+  breakdownFullData = Object.values(groups).map(finalizeGroup).map((g) => {
+    if (selectedOption === "wing") g.drill = { w: g.name };
+    else if (selectedOption === "tehsil") g.drill = g._wings.size === 1 ? { w: [...g._wings][0], t: g.name } : null;
+    else g.drill = { w: g._first.w, t: g._first.t, m: g._first.m };
+    return g;
+  });
+
+  const undrillable = breakdownFullData.filter((g) => !g.drill).length;
+  $("breakdownHint").innerText = "Stacked Male + Female current enrollment \u2022 sorted by Ach% \u2022 click a bar/row to drill down" +
+    (undrillable ? " (tehsils spanning several wings can\u2019t be drilled \u2014 pick a wing first)" : "");
+
+  sortBreakdownData();
+  drawBreakdownChart();
+  renderBreakdownTable();
+
+  const bcParts = ["<span>Punjab</span>"];
+  if (f.d) bcParts.push(`<span>${escHtml(f.d)}</span>`); if (f.w) bcParts.push(`<span>${escHtml(f.w)}</span>`); if (f.t) bcParts.push(`<span>${escHtml(f.t)}</span>`);
+  $("breakdownBreadcrumb").innerHTML = bcParts.join(" &rarr; ");
+  $("breakdownTitle").innerText = `Breakdown by ${selectedOption.charAt(0).toUpperCase() + selectedOption.slice(1)}`;
+  $("breakdownModal").style.display = "flex";
 }
 
-/* Export for browsers (<script> tag) and for node-based tests alike. */
-globalThis.GradesLoader = {
-  loadGradesData, computeAch, parseCSV, mapColumns, resolveWing,
-  normalizeEmis, parseCount, parsePct, assessDelta, GRADES_PATHS, HEADER_ALIASES, ALLOWED_WINGS,
-};
+function closeBreakdownModal() {
+  $("breakdownModal").style.display = "none";
+  breakdownFullData = []; breakdownCurrentPage = 1;
+}
+
+function drawBreakdownChart() {
+  const sorted = [...breakdownFullData].sort((a, b) => b.achT - a.achT);
+  renderStackedChart("breakdown", "breakdownChart", "breakdownChartParent", sorted, (item) => drillBreakdownItem(item));
+}
+
+function sortBreakdownData() {
+  const val = $("breakdownSortOrder").value;
+  breakdownFullData.sort((a, b) => {
+    if (val === "name") return a.name.localeCompare(b.name);
+    if (val === "achM") return b.achM - a.achM;
+    if (val === "achF") return b.achF - a.achF;
+    return b.achT - a.achT;
+  });
+  breakdownCurrentPage = 1; renderBreakdownTable();
+}
+
+function renderBreakdownTable() {
+  const size = parseInt($("breakdownPageSize").value), start = (breakdownCurrentPage - 1) * size, pageData = breakdownFullData.slice(start, start + size);
+  $("breakdownTableHead").innerHTML = genderHeadHTML("Name");
+  let html = "";
+  pageData.forEach((item, i) => {
+    const row = genderRowHTML(item, start + i + 1, `<strong>${escHtml(item.name)}</strong>`);
+    html += item.drill ? row.replace("<tr>", `<tr style="cursor:pointer;" onclick="handleBreakdownDrill('${encKey(item.key)}')">`) : row;
+  });
+  $("breakdownTableBody").innerHTML = html; renderBreakdownPagination();
+}
+
+function renderBreakdownPagination() {
+  const total = Math.ceil(breakdownFullData.length / parseInt($("breakdownPageSize").value));
+  let html = ""; for (let i = Math.max(1, breakdownCurrentPage - 2); i <= Math.min(total, breakdownCurrentPage + 2); i++) { html += `<li class="page-item ${i === breakdownCurrentPage ? "active" : ""}"><a class="page-link" onclick="goToBreakdownPage(${i})">${i}</a></li>`; }
+  $("breakdownPagination").innerHTML = html;
+}
+
+function goToBreakdownPage(p) { breakdownCurrentPage = p; renderBreakdownTable(); }
+
+function handleBreakdownDrill(keyEnc) {
+  const key = decodeURIComponent(keyEnc);
+  drillBreakdownItem(breakdownFullData.find((g) => g.key === key));
+}
+
+function drillBreakdownItem(item) {
+  if (!item || !item.drill) return;
+  const dr = item.drill;
+  closeBreakdownModal();
+  applyScope(dr);
+}
+
+/* Set Wing / Tehsil / Markaz in one go (one redraw) from a drill target {w, t?, m?}. */
+function applyScope(dr) {
+  batchScope = true;
+  try {
+    if (dr.w != null) { $("wing").value = dr.w; updateTehsil(); }
+    if (dr.t != null) { $("tehsil").value = dr.t; updateMarkaz(); }
+    if (dr.m != null) { $("markaz").value = dr.m; }
+  } finally { batchScope = false; }
+  loadData();
+}
+
+function exportBreakdownCSV() {
+  let csv = "Sr.,Name,Base M,Base F,Base T,Current M,Current F,Current T,Delta M,Delta F,Delta T,Target M,Target F,Target T,Ach M%,Ach F%,Ach T%\n";
+  breakdownFullData.forEach((s, i) => {
+    csv += `"${i + 1}","${s.name.replace(/"/g, '""')}",${s.basM},${s.basF},${s.basT},${s.curM},${s.curF},${s.curT},${dv(s.dM)},${dv(s.dF)},${dv(s.dT)},${s.tarM},${s.tarF},${s.tarT},${s.achM.toFixed(2)}%,${s.achF.toFixed(2)}%,${s.achT.toFixed(2)}%\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" }), link = document.createElement("a");
+  link.href = URL.createObjectURL(blob); link.setAttribute("download", `breakdown_${breakdownLevel}_${new Date().getTime()}.csv`); link.click();
+}
+
+function exportBreakdownPDF() {
+  const { jsPDF } = window.jspdf;
+  const captureArea = $("breakdownContent");
+  const timestamp = new Date().toLocaleString("en-PK", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Karachi" });
+
+  const btns = document.querySelectorAll(".no-print");
+  btns.forEach((b) => (b.style.opacity = "0"));
+
+  html2canvas(captureArea, {
+    scale: 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
+    onclone: (clonedDoc) => {
+      const area = clonedDoc.getElementById("breakdownContent");
+      area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
+      clonedDoc.querySelectorAll(".table-responsive").forEach((el) => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
+      const stampDiv = clonedDoc.createElement("div");
+      stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
+      stampDiv.innerHTML = `<div><strong>SED PUNJAB ENROLLMENT BREAKDOWN</strong><br><small style="opacity:0.8">By ${breakdownLevel}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
+      area.insertBefore(stampDiv, area.firstChild);
+      clonedDoc.querySelectorAll(".no-print").forEach((b) => (b.style.display = "none"));
+    },
+  }).then((canvas) => {
+    btns.forEach((b) => (b.style.opacity = "1"));
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const innerWidth = pageWidth - margin * 2;
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
+    const finalDoc = new jsPDF({ orientation: "p", unit: "mm", format: [pageWidth, pdfImgHeight + margin * 2] });
+    finalDoc.addImage(imgData, "PNG", margin, margin, innerWidth, pdfImgHeight, undefined, "FAST");
+    finalDoc.save(`breakdown_${breakdownLevel}_${new Date().getTime()}.pdf`);
+  }).catch((err) => {
+    console.error("Export Error:", err);
+    btns.forEach((b) => (b.style.opacity = "1"));
+    alert("PDF export failed. Check console for details.");
+  });
+}
+
+function applySchoolFilter() {
+  const filterType = $("schoolFilterSelect").value;
+  if (filterType === "all") loadTable("all_schools");
+  else if (filterType === "below_baseline") loadTable("below_baseline");
+  else if (filterType === "below_target") loadTable("below_target");
+  else if (filterType === "above_baseline") loadTable("above_baseline");
+  else if (filterType === "above_baseline_below_target") loadTable("above_baseline_below_target");
+  else if (filterType === "above_target") loadTable("above_target");
+}
+
+/* ---------------- % Achievement info popover ---------------- */
+function positionAchInfo() {
+  const btn = $("achInfoBtn").getBoundingClientRect(), pop = $("achInfoPop");
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const left = Math.min(Math.max(12, btn.right - w), Math.max(12, window.innerWidth - w - 12));
+  let top = btn.bottom + 8;
+  if (top + h > window.innerHeight - 12) top = Math.max(12, btn.top - h - 8);
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+}
+function closeAchInfo() {
+  $("achInfoPop").classList.remove("show");
+  $("achInfoBtn").setAttribute("aria-expanded", "false");
+}
+function toggleAchInfo(ev) {
+  if (ev) ev.stopPropagation();
+  const pop = $("achInfoPop");
+  if (pop.classList.contains("show")) { closeAchInfo(); return; }
+  pop.classList.add("show");
+  $("achInfoBtn").setAttribute("aria-expanded", "true");
+  positionAchInfo();
+}
+document.addEventListener("click", (e) => { const pop = $("achInfoPop"); if (pop && pop.classList.contains("show") && !pop.contains(e.target)) closeAchInfo(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAchInfo(); });
+window.addEventListener("resize", () => { const pop = $("achInfoPop"); if (pop && pop.classList.contains("show")) positionAchInfo(); });
+window.addEventListener("scroll", closeAchInfo, { passive: true });
+
+/* INSIGHT PDF EXPORT */
+function exportInsightPDF() {
+  const { jsPDF } = window.jspdf;
+  const captureArea = $("captureArea");
+  const breadcrumb = $("insightBreadcrumb").innerText;
+  const timestamp = new Date().toLocaleString("en-PK", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Karachi" });
+
+  const btns = document.querySelectorAll(".no-print");
+  btns.forEach((b) => (b.style.opacity = "0"));
+
+  html2canvas(captureArea, {
+    scale: 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
+    onclone: (clonedDoc) => {
+      const area = clonedDoc.getElementById("captureArea");
+      area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
+      clonedDoc.querySelectorAll(".table-responsive, #markaz-school-table-scroll").forEach((el) => { el.style.maxHeight = "none"; el.style.overflow = "visible"; });
+      const stampDiv = clonedDoc.createElement("div");
+      stampDiv.style.cssText = "background:#1e3a5f;color:white;padding:15px 20px;border-radius:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-family:sans-serif;";
+      stampDiv.innerHTML = `<div><strong>SED PUNJAB ENROLLMENT INTELLIGENCE</strong><br><small style="opacity:0.8">${breadcrumb}</small></div><div style="text-align:right;">Generated: ${timestamp}<br><small style="opacity:0.8">SED Punjab Dashboard by SheeraZ</small></div>`;
+      area.insertBefore(stampDiv, area.firstChild);
+      clonedDoc.querySelectorAll(".no-print").forEach((b) => (b.style.display = "none"));
+    },
+  }).then((canvas) => {
+    btns.forEach((b) => (b.style.opacity = "1"));
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const innerWidth = pageWidth - margin * 2;
+    const imgProps = pdf.getImageProperties(imgData);
+    const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
+    const finalDoc = new jsPDF({ orientation: "p", unit: "mm", format: [pageWidth, pdfImgHeight + margin * 2] });
+    finalDoc.addImage(imgData, "PNG", margin, margin, innerWidth, pdfImgHeight, undefined, "FAST");
+    finalDoc.save(getExportFileName("pdf"));
+  }).catch((err) => {
+    console.error("Export Error:", err);
+    btns.forEach((b) => (b.style.opacity = "1"));
+    alert("PDF export failed. Check console for details.");
+  });
+}
+</script>
+
+</body>
+</html>
