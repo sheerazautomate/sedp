@@ -101,10 +101,11 @@ function parsePct(v) {
  * fileVal (the export's Achievement %) wins when present; otherwise compute.
  * No-growth-asked rows (target <= baseline): staying at/above baseline = 100.
  */
-function computeAch(cur, bas, tar, fileVal) {
-  if (Number.isFinite(fileVal)) return fileVal;
+function computeAch(cur, bas, tar) {
   const denom = tar - bas;
+
   if (denom <= 0) return cur >= bas ? 100 : 0;
+
   return ((cur - bas) / denom) * 100;
 }
 
