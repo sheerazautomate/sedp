@@ -437,10 +437,10 @@ font-weight:700;color:#1e3a8a;font-size:.74rem}
   </div>
 
   <div class="row g-2 mb-3 filter-row filter-row-main">
-    <div class="col"><select id="district" class="form-select" onchange="updateWing()"></select></div>
-    <div class="col"><select id="wing" class="form-select" onchange="updateTehsil()"></select></div>
-    <div class="col"><select id="tehsil" class="form-select" onchange="updateMarkaz()"></select></div>
-    <div class="col"><select id="markaz" class="form-select" onchange="loadData()"></select></div>
+    <div class="col"><select id="district" class="form-select" onchange="onDistrictChange()"></select></div>
+    <div class="col"><select id="wing" class="form-select" onchange="onFilterChange()"></select></div>
+    <div class="col"><select id="tehsil" class="form-select" onchange="onFilterChange()"></select></div>
+    <div class="col"><select id="markaz" class="form-select" onchange="onMarkazChange()"></select></div>
     <div class="col-auto">
       <div class="btn-group w-100">
         <button class="btn btn-primary btn-sm fw-bold" onclick="loadData()">Chart</button>
@@ -605,7 +605,7 @@ font-weight:700;color:#1e3a8a;font-size:.74rem}
 /* Data rows: {d,t,m,w,emis,school,
  * basM,curM,tarM, basF,curF,tarF, basT,curT,tarT,
  * prevM,prevF,prevT, achM,achF,achT}  (see fetch-data.js) */
-let MASTER_DATA = [], META = null, hierarchy = {};
+let MASTER_DATA = [], META = null;
 let CHARTS = {};
 if (window.Chart) {
   Chart.defaults.font.family = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
@@ -813,7 +813,6 @@ async function loadInitialData() {
     const { rows, meta, report } = await GradesLoader.loadGradesData();
     MASTER_DATA = rows; META = meta;
     DELTA = report.delta || { state: "ok", reason: "", refDate: null };
-    hierarchy = buildHierarchy(rows);
     setupDropdowns();
     updateViewByDropdown();
     const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
@@ -857,7 +856,8 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
 });
 
 function currentFilters() {
-  return { d: $("district").value, w: $("wing").value, t: $("tehsil").value, m: $("markaz").value };
+  const mv = $("markaz").value, i = mv.indexOf("||");
+  return { d: $("district").value, w: $("wing").value || (i >= 0 ? mv.slice(0, i) : ""), t: $("tehsil").value, m: i >= 0 ? mv.slice(i + 2) : mv };
 }
 function filterRows(f) {
   return MASTER_DATA.filter((r) => (!f.d || r.d === f.d) && (!f.w || r.w === f.w) && (!f.t || r.t === f.t) && (!f.m || r.m === f.m));
@@ -908,56 +908,70 @@ function schoolRow(r) {
   };
 }
 
-function buildHierarchy(data) {
-  const h = {};
-  data.forEach((r) => {
-    if (!h[r.d]) h[r.d] = {};
-    if (!h[r.d][r.w]) h[r.d][r.w] = {};
-    if (!h[r.d][r.w][r.t]) h[r.d][r.w][r.t] = [];
-    if (!h[r.d][r.w][r.t].includes(r.m)) h[r.d][r.w][r.t].push(r.m);
-  });
-  return h;
+/* ---------------- Filter dropdowns ----------------
+   District -> Wing / Tehsil / Markaz. Wing and Tehsil are independent of each other:
+   Tehsil can be chosen with or without a Wing (all wings of that tehsil are then included).
+   Markaz options appear once a Tehsil is chosen; their value is "wing||name" because markaz
+   names repeat across wings, and choosing one also fixes the Wing. */
+const markazVal = (w, m) => w + "||" + m;
+
+function fillSelect(el, placeholder, opts, selected) {
+  el.innerHTML = `<option value="">${placeholder}</option>` + opts.map(([v, l]) => `<option value="${escHtml(v)}">${escHtml(l)}</option>`).join("");
+  el.value = selected;
 }
 
+/* Rebuild Wing / Tehsil / Markaz options from the current District (and each other),
+   keeping the current selections that are still valid and clearing the ones that are not. */
+function rebuildDropdowns() {
+  const d = $("district").value;
+  let w = $("wing").value, t = $("tehsil").value, mv = $("markaz").value;
+  const inD = (r) => !d || r.d === d;
 
+  if (w && !MASTER_DATA.some((r) => inD(r) && r.w === w)) w = "";
+  if (t && !MASTER_DATA.some((r) => inD(r) && (!w || r.w === w) && r.t === t)) t = "";
+  if (mv) {
+    const i = mv.indexOf("||"), mw = mv.slice(0, i), mm = mv.slice(i + 2);
+    if (!t || !MASTER_DATA.some((r) => inD(r) && (!w || r.w === w) && r.t === t && r.w === mw && r.m === mm)) mv = "";
+  }
+
+  const sortedUnique = (arr) => [...new Set(arr)].sort();
+  const wings = sortedUnique(MASTER_DATA.filter(inD).map((r) => r.w));
+  const tehsils = sortedUnique(MASTER_DATA.filter((r) => inD(r) && (!w || r.w === w)).map((r) => r.t));
+
+  const mk = {};
+  if (t) MASTER_DATA.forEach((r) => { if (inD(r) && (!w || r.w === w) && r.t === t) mk[markazVal(r.w, r.m)] = r; });
+  const mkKeys = Object.keys(mk).sort((a, b) => mk[a].m.localeCompare(mk[b].m) || a.localeCompare(b));
+  const nameCount = {};
+  mkKeys.forEach((k) => { nameCount[mk[k].m] = (nameCount[mk[k].m] || 0) + 1; });
+
+  fillSelect($("wing"), "Wing", wings.map((x) => [x, x]), w);
+  fillSelect($("tehsil"), "Tehsil", tehsils.map((x) => [x, x]), t);
+  fillSelect($("markaz"), "Markaz", mkKeys.map((k) => [k, nameCount[mk[k].m] > 1 ? `${mk[k].m} (${mk[k].w})` : mk[k].m]), mv);
+  updateViewByDropdown();
+}
 
 function setupDropdowns() {
   const distSelect = $("district");
-  distSelect.innerHTML = '<option value="">All Districts</option>';
-  Object.keys(hierarchy).sort().forEach((d) => distSelect.innerHTML += `<option value="${d}">${d}</option>`);
-  updateWing();
+  fillSelect(distSelect, "All Districts", [...new Set(MASTER_DATA.map((r) => r.d))].sort().map((x) => [x, x]), "");
+  $("wing").value = ""; $("tehsil").value = ""; $("markaz").value = "";
+  rebuildDropdowns();
 }
 
-function updateWing() {
-  const d = $("district").value, wEl = $("wing");
-  wEl.innerHTML = '<option value="">Wing</option>';
-  $("tehsil").innerHTML = '<option value="">Tehsil</option>';
-  $("markaz").innerHTML = '<option value="">Markaz</option>';
-  if (d && hierarchy[d]) Object.keys(hierarchy[d]).sort().forEach((w) => wEl.innerHTML += `<option value="${w}">${w}</option>`);
-  else { const wings = new Set(); Object.values(hierarchy).forEach((obj) => Object.keys(obj).forEach((w) => wings.add(w))); Array.from(wings).sort().forEach((w) => wEl.innerHTML += `<option value="${w}">${w}</option>`); }
-  updateViewByDropdown();
+function onDistrictChange() {
+  $("wing").value = ""; $("tehsil").value = ""; $("markaz").value = "";
+  rebuildDropdowns();
   loadData();
 }
 
-function updateTehsil() {
-  const d = $("district").value, w = $("wing").value, tEl = $("tehsil");
-  tEl.innerHTML = '<option value="">Tehsil</option>'; if (!w) return;
-  const tehsils = new Set();
-  if (d) { if (hierarchy[d][w]) Object.keys(hierarchy[d][w]).forEach((t) => tehsils.add(t)); }
-  else { Object.values(hierarchy).forEach((dist) => { if (dist[w]) Object.keys(dist[w]).forEach((t) => tehsils.add(t)); }); }
-  Array.from(tehsils).sort().forEach((t) => tEl.innerHTML += `<option value="${t}">${t}</option>`);
-  updateViewByDropdown();
+function onFilterChange() {
+  rebuildDropdowns();
   loadData();
 }
 
-function updateMarkaz() {
-  const d = $("district").value, w = $("wing").value, t = $("tehsil").value, mEl = $("markaz");
-  mEl.innerHTML = '<option value="">Markaz</option>'; if (!t) return;
-  const markazs = new Set();
-  if (d) { if (hierarchy[d][w][t]) hierarchy[d][w][t].forEach((m) => markazs.add(m)); }
-  else { Object.values(hierarchy).forEach((dist) => { if (dist[w] && dist[w][t]) dist[w][t].forEach((m) => markazs.add(m)); }); }
-  Array.from(markazs).sort().forEach((m) => mEl.innerHTML += `<option value="${m}">${m}</option>`);
-  updateViewByDropdown();
+function onMarkazChange() {
+  const mv = $("markaz").value, i = mv.indexOf("||");
+  if (i >= 0 && !$("wing").value) $("wing").value = mv.slice(0, i);
+  rebuildDropdowns();
   loadData();
 }
 
@@ -1006,6 +1020,28 @@ function updateKPIs(stats, rows) {
 }
 
 /* ---------------- Chart ---------------- */
+/* Level shown by the chart / summary table: a chosen Tehsil (with or without a Wing) goes
+   straight to its markaz; otherwise the first level that is not yet chosen. */
+function groupAtLevel(filtered, f) {
+  const key = f.t ? "m" : !f.d ? "d" : !f.w ? "w" : "t";
+  const groups = {};
+  filtered.forEach((r) => {
+    let gk, name, drill = null;
+    if (f.m) { gk = r.emis || r.school; name = r.school; }
+    else if (key === "d") { gk = name = r.d; drill = { d: r.d }; }
+    else if (key === "w") { gk = name = r.w; drill = { w: r.w }; }
+    else if (key === "t") { gk = name = r.t; drill = { t: r.t }; }
+    else {
+      gk = r.d + "||" + r.w + "||" + r.m;
+      name = r.m + (f.w ? "" : " (" + r.w + ")") + (f.d ? "" : " · " + r.d);
+      drill = { w: r.w, m: r.m };
+    }
+    if (!groups[gk]) { groups[gk] = blankGroup(name); groups[gk].drill = drill; }
+    accGroup(groups[gk], r);
+  });
+  return Object.values(groups).map(finalizeGroup);
+}
+
 function loadData() {
   if (batchScope) return;
   showChart();
@@ -1013,21 +1049,8 @@ function loadData() {
   const filtered = filterRows(f);
   updateKPIs(sumRows(filtered), filtered);
 
-  const key = !f.d ? "d" : !f.w ? "w" : !f.t ? "t" : "m";
-  const groups = {};
-  filtered.forEach((r) => {
-    const gk = f.m ? r.school : r[key];
-    if (!groups[gk]) groups[gk] = blankGroup(gk);
-    accGroup(groups[gk], r);
-  });
-  const data = Object.values(groups).map(finalizeGroup).sort((a, b) => b.achT - a.achT);
-  renderStackedChart("main", "chart", "chartParent", data, (item) => {
-    const ff = currentFilters();
-    if (!ff.d) { $("district").value = item.name; updateWing(); }
-    else if (!ff.w) { $("wing").value = item.name; updateTehsil(); }
-    else if (!ff.t) { $("tehsil").value = item.name; updateMarkaz(); }
-    else if (!ff.m) { $("markaz").value = item.name; loadData(); }
-  });
+  const data = groupAtLevel(filtered, f).sort((a, b) => b.achT - a.achT);
+  renderStackedChart("main", "chart", "chartParent", data, (item) => { if (item.drill) applyScope(item.drill); });
 }
 
 function renderStackedChart(key, canvasId, parentId, data, onClick) {
@@ -1088,14 +1111,7 @@ function loadTable(type) {
   if (type !== "all" || f.m) {
     tableData = filtered.map(schoolRow);
   } else {
-    const key = !f.d ? "d" : !f.w ? "w" : !f.t ? "t" : "m";
-    const groups = {};
-    filtered.forEach((r) => {
-      const gk = r[key];
-      if (!groups[gk]) groups[gk] = blankGroup(gk);
-      accGroup(groups[gk], r);
-    });
-    tableData = Object.values(groups).map(finalizeGroup);
+    tableData = groupAtLevel(filtered, f);
   }
 
   /* Filters always decide on Totals (M/F/T all displayed). */
@@ -1166,9 +1182,8 @@ function showChart() { $("chartView").classList.remove("hidden"); $("tableView")
 /* ---------------- Insights ---------------- */
 function showInsights() {
   const f = currentFilters();
-  let scopeLevel = 0;
-  if (f.d) scopeLevel = 1; if (f.d && f.w) scopeLevel = 2;
-  if (f.d && f.w && f.t) scopeLevel = 3; if (f.d && f.w && f.t && f.m) scopeLevel = 4;
+  /* Deepest chosen level decides the scope; Tehsil may be chosen without a Wing. */
+  const scopeLevel = f.m ? 4 : f.t ? 3 : (f.d && f.w) ? 2 : f.d ? 1 : 0;
   const bcParts = ["<span>Punjab</span>"];
   if (f.d) bcParts.push(`<span>${f.d}</span>`); if (f.w) bcParts.push(`<span>${f.w}</span>`);
   if (f.t) bcParts.push(`<span>${f.t}</span>`); if (f.m) bcParts.push(`<span>${f.m}</span>`);
@@ -1410,9 +1425,9 @@ function updateViewByDropdown() {
   viewSelect.innerHTML = '<option value="">View by...</option>';
   viewSelect.disabled = false;
   if (!f.d) viewSelect.innerHTML += '<option value="wing">Breakdown by Wing</option>';
+  else if (f.t) viewSelect.disabled = true;
   else if (!f.w) viewSelect.innerHTML += '<option value="tehsil">Breakdown by Tehsil</option><option value="markaz">Breakdown by Markaz</option>';
-  else if (!f.t) viewSelect.innerHTML += '<option value="markaz">Breakdown by Markaz</option>';
-  else viewSelect.disabled = true;
+  else viewSelect.innerHTML += '<option value="markaz">Breakdown by Markaz</option>';
 }
 
 function openBreakdownModal() {
@@ -1431,21 +1446,18 @@ function openBreakdownModal() {
     if (selectedOption === "wing") { key = name = r.w; }
     else if (selectedOption === "tehsil") { key = name = r.t; }
     else { key = r.w + "||" + r.t + "||" + r.m; name = r.m + " \u00b7 " + r.t + (f.w ? "" : " (" + r.w + ")"); }
-    if (!groups[key]) { groups[key] = blankGroup(name); groups[key].key = key; groups[key]._wings = new Set(); groups[key]._first = r; }
+    if (!groups[key]) { groups[key] = blankGroup(name); groups[key].key = key; groups[key]._first = r; }
     accGroup(groups[key], r);
-    groups[key]._wings.add(r.w);
   });
 
   breakdownFullData = Object.values(groups).map(finalizeGroup).map((g) => {
     if (selectedOption === "wing") g.drill = { w: g.name };
-    else if (selectedOption === "tehsil") g.drill = g._wings.size === 1 ? { w: [...g._wings][0], t: g.name } : null;
+    else if (selectedOption === "tehsil") g.drill = { t: g.name };
     else g.drill = { w: g._first.w, t: g._first.t, m: g._first.m };
     return g;
   });
 
-  const undrillable = breakdownFullData.filter((g) => !g.drill).length;
-  $("breakdownHint").innerText = "Stacked Male + Female current enrollment \u2022 sorted by Ach% \u2022 click a bar/row to drill down" +
-    (undrillable ? " (tehsils spanning several wings can\u2019t be drilled \u2014 pick a wing first)" : "");
+  $("breakdownHint").innerText = "Stacked Male + Female current enrollment \u2022 sorted by Ach% \u2022 click a bar/row to drill down";
 
   sortBreakdownData();
   drawBreakdownChart();
@@ -1510,13 +1522,14 @@ function drillBreakdownItem(item) {
   applyScope(dr);
 }
 
-/* Set Wing / Tehsil / Markaz in one go (one redraw) from a drill target {w, t?, m?}. */
+/* Set District / Wing / Tehsil / Markaz in one go (one redraw) from a drill target {d?, w?, t?, m?}. */
 function applyScope(dr) {
   batchScope = true;
   try {
-    if (dr.w != null) { $("wing").value = dr.w; updateTehsil(); }
-    if (dr.t != null) { $("tehsil").value = dr.t; updateMarkaz(); }
-    if (dr.m != null) { $("markaz").value = dr.m; }
+    if (dr.d != null) { $("district").value = dr.d; rebuildDropdowns(); }
+    if (dr.w != null) { $("wing").value = dr.w; rebuildDropdowns(); }
+    if (dr.t != null) { $("tehsil").value = dr.t; rebuildDropdowns(); }
+    if (dr.m != null) { $("markaz").value = markazVal(dr.w != null ? dr.w : $("wing").value, dr.m); rebuildDropdowns(); }
   } finally { batchScope = false; }
   loadData();
 }
