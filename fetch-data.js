@@ -16,10 +16,25 @@
  *   Female Baseline | Female Current | Female Target |
  *   Total Baseline | Total Current | Total Target | Achievement %
  *
- * Verified formula:  Achievement % = (Current - Baseline) / (Target - Baseline)
- * (NT-style with NT = Target - Baseline). The file's Achievement % is used
- * as-is for each school's Total; Male/Female and all group aggregates are
- * computed with the same formula. There is NO second "% Ach" metric anymore.
+ * Verified formula:  Achievement % = (Current - Baseline) / (Target - Baseline) * 100
+ * (NT-style with NT = Target - Baseline). It is computed here for every school
+ * (Male, Female and Total) and for every group aggregate (from summed values).
+ * It is deliberately UNCLAMPED: above 100% means the target was exceeded and a
+ * negative value means enrollment fell below baseline. The export's own
+ * "Achievement %" column (which is clamped to 0-100) is NOT used for display.
+ * There is NO second "% Ach" metric.
+ *
+ * Totals: Baseline and Target totals are Male + Female. Total Current is the
+ * export's own figure, which also counts the "Other" category (children
+ * reported as Other by school heads, with no Male/Female column). The
+ * difference is kept per school as `curOther` and shown on the dashboard, so
+ * Current Male + Female + Other = Total Current.
+ *
+ * Day change: compared against data/enrollment_prev.csv. The loader reports
+ * `report.delta = {state, reason, refDate}` with state "ok" | "warn" | "error":
+ *   error  prev file missing/unreadable, or > 2% of schools absent from it
+ *   warn   prev file exists but meta.ref_date_pkt is not today's PKT date
+ * (the dashboard shows N/A on "error" and an amber note on "warn").
  *
  * Wing resolution per school: emis_wing.json lookup -> Markaz-name keyword
  * fallback (Female/Male; "female" tested BEFORE "male" since it contains the
@@ -58,9 +73,9 @@ const HEADER_ALIASES = {
   female_baseline: ["femalebaseline", "baselinegirls", "girlsbaseline", "fbaseline", "fbase"],
   female_current: ["femalecurrent", "currentgirls", "girlscurrent", "fcurrent", "fcurr"],
   female_target: ["femaletarget", "girlstarget", "targetgirls", "ftarget", "ftarg"],
-  /* Totals are derived from M+F. The export's Total Current is not
-   * reliable: it disagrees with the sex columns for 775 schools, so using it
-   * makes every dashboard total (and day delta) internally inconsistent. */
+  /* Baseline/Target totals are derived as M+F (they always equal the file's
+   * own totals). Total Current is taken from the file because it includes the
+   * "Other" category - see the header comment. */
   total_baseline: ["totalbaseline", "baselinetotal", "totalbase"],
   total_current: ["totalcurrent", "currenttotal", "currentenrolment", "currentenrollment", "totalcurr"],
   total_target: ["totaltarget", "targettotal", "targettedenrolment", "targetedenrolment", "targetedenrollment", "targettedenrollment", "totaltarg"],
@@ -97,9 +112,9 @@ function parsePct(v) {
 }
 
 /**
- * Achievement % with the verified Grades formula.
- * fileVal (the export's Achievement %) wins when present; otherwise compute.
- * No-growth-asked rows (target <= baseline): staying at/above baseline = 100.
+ * Achievement % = (cur - bas) / (tar - bas) * 100, deliberately UNCLAMPED.
+ * No-growth-asked rows (target <= baseline): staying at/above baseline = 100,
+ * dropping below baseline = 0.
  */
 function computeAch(cur, bas, tar) {
   const denom = tar - bas;
@@ -182,6 +197,39 @@ function resolveWing(emis, markaz, wingMap) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Day-change reference health                                         */
+/* ------------------------------------------------------------------ */
+
+/* More than this share of schools missing from the previous-day snapshot
+ * means the reference is incomplete and the day change cannot be trusted. */
+const MAX_MISSING_PREV_RATIO = 0.02;
+
+function pktToday() {
+  return new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+function assessDelta(prevText, prevOk, missingPrev, total, meta) {
+  if (!prevText) {
+    return { state: "error", reason: "Previous-day enrollment was not fetched (file missing)." };
+  }
+  if (!prevOk) {
+    return { state: "error", reason: "Previous-day enrollment was not fetched properly (file unreadable)." };
+  }
+  if (total > 0 && missingPrev / total > MAX_MISSING_PREV_RATIO) {
+    return {
+      state: "error",
+      reason: "Previous-day enrollment is incomplete (" + missingPrev.toLocaleString() +
+        " of " + total.toLocaleString() + " schools missing).",
+    };
+  }
+  const refDate = meta && meta.ref_date_pkt ? String(meta.ref_date_pkt) : null;
+  if (refDate && refDate !== pktToday()) {
+    return { state: "warn", refDate, reason: "Today's reference snapshot has not been fetched yet." };
+  }
+  return { state: "ok", refDate };
+}
+
+/* ------------------------------------------------------------------ */
 /* Main loader                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -228,7 +276,7 @@ function parseEnrollmentTable(text) {
       basM, curM, tarM, basF, curF, tarF,
       // Grades includes an "Other" category in Total Current that is not
       // represented by the Male/Female columns. Preserve the official total
-      // and expose the difference instead of silently discarding it.
+      // and expose the difference (curOther) instead of silently discarding it.
       basT: basM + basF,
       curT: idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current)),
       curOther: (idx.total_current === -1 ? curM + curF : parseCount(cell(row, idx.total_current))) - curM - curF,
@@ -250,11 +298,13 @@ async function loadGradesData() {
   /* The day's midnight reference snapshot, keyed by EMIS (same layout as
      current). Syncs through the day leave it pinned so Δ = since midnight. */
   let prevMap = {};
+  let prevOk = false;
   if (prevText) {
     try {
       parseEnrollmentTable(prevText).forEach((s) => {
         if (s.emis) prevMap[s.emis] = { curM: s.curM, curF: s.curF, curT: s.curT };
       });
+      prevOk = Object.keys(prevMap).length > 0;
     } catch (e) {
       console.warn("[grades] ignoring unreadable prev snapshot:", e.message);
     }
@@ -284,12 +334,14 @@ async function loadGradesData() {
     }
     const p = prevMap[s.emis];
     if (p) { s.prevM = p.curM; s.prevF = p.curF; s.prevT = p.curT; }
-    else { s.prevM = 0; s.prevF = 0; s.prevT = 0; missingPrev++; }
+    /* Not in the reference (e.g. a brand-new school): treat as unchanged so a
+       missing row never shows up as a full-enrollment "increase". */
+    else { s.prevM = s.curM; s.prevF = s.curF; s.prevT = s.curT; missingPrev++; }
     wingValues[s.w] = (wingValues[s.w] || 0) + 1;
-    /* Single % metric: file value for Total, same formula for M/F. */
-    s.achT = computeAch(s.curT, s.basT, s.tarT, s.achFile);
-    s.achM = computeAch(s.curM, s.basM, s.tarM, null);
-    s.achF = computeAch(s.curF, s.basF, s.tarF, null);
+    /* Single % metric: same unclamped formula for Total, M and F. */
+    s.achT = computeAch(s.curT, s.basT, s.tarT);
+    s.achM = computeAch(s.curM, s.basM, s.tarM);
+    s.achF = computeAch(s.curF, s.basF, s.tarF);
     delete s.achFile;
     rows.push(s);
   });
@@ -302,9 +354,11 @@ async function loadGradesData() {
     unknownWing,
     wings: Object.keys(wingValues).sort(),
     hasPrev: !!prevText,
+    delta: assessDelta(prevText, prevOk, missingPrev, rows.length, meta),
     hasWingMap: Object.keys(wingMap).length > 0,
   };
   console.info("[grades] loaded", report);
+  if (report.delta.state !== "ok") console.warn("[grades] day change " + report.delta.state + ": " + report.delta.reason);
   if (droppedWing) {
     console.warn("[grades] dropped " + droppedWing +
       " schools whose Wing is not SE / M-EE / W-EE (Male, Female, Unknown, etc.).");
@@ -315,5 +369,5 @@ async function loadGradesData() {
 /* Export for browsers (<script> tag) and for node-based tests alike. */
 globalThis.GradesLoader = {
   loadGradesData, computeAch, parseCSV, mapColumns, resolveWing,
-  normalizeEmis, parseCount, parsePct, GRADES_PATHS, HEADER_ALIASES, ALLOWED_WINGS,
+  normalizeEmis, parseCount, parsePct, assessDelta, GRADES_PATHS, HEADER_ALIASES, ALLOWED_WINGS,
 };
