@@ -28,6 +28,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="fetch-data.js"></script>
   <style>
 
@@ -307,7 +308,81 @@ font-weight:700;color:#1e3a8a;font-size:.74rem}
       .kpi-sub-item .new-target-val{font-size:.58rem}
     }
 
-  </style>
+      /* ---------- Download All Reports: SEDP logo as a pressable button ---------- */
+    .emblem-btn{position:relative;isolation:isolate;flex:0 0 auto;width:46px;height:46px;padding:0;margin:0;border:0;border-radius:50%;background:transparent;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;outline:none}
+    .emblem-btn::before{content:"";position:absolute;inset:-5px;border-radius:50%;z-index:-1;
+      background:linear-gradient(180deg,#ffffff 0%,#e2e9f6 100%);
+      box-shadow:0 5px 0 #94a3b8,0 12px 20px -8px rgba(37,99,235,.55),inset 0 1px 0 #ffffff;
+      transition:transform 80ms ease-out,box-shadow 80ms ease-out}
+    .emblem-btn .dash-emblem{transition:transform 80ms ease-out}
+    .emblem-btn:hover::before{box-shadow:0 5px 0 #94a3b8,0 14px 24px -8px rgba(37,99,235,.65),inset 0 1px 0 #ffffff}
+    .emblem-btn:focus-visible::before{outline:3px solid #2563eb;outline-offset:3px}
+    .emblem-btn:active:not(.is-disabled)::before{transform:translateY(5px);box-shadow:0 0 0 #94a3b8,0 3px 6px -3px rgba(37,99,235,.5)}
+    .emblem-btn:active:not(.is-disabled) .dash-emblem{transform:translateY(5px)}
+    .emblem-btn.is-disabled{cursor:not-allowed}
+    .emblem-btn.is-disabled .dash-emblem{filter:grayscale(1);opacity:.5}
+    .emblem-btn.is-disabled::before{background:#f1f5f9;box-shadow:0 1px 0 #cbd5e1,0 2px 6px -4px rgba(15,23,42,.2)}
+    .emblem-btn.pulse-once::after{content:"";position:absolute;inset:-5px;border-radius:50%;pointer-events:none;animation:rptPulse 1.3s ease-out 3}
+    @keyframes rptPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}100%{box-shadow:0 0 0 14px rgba(34,197,94,0)}}
+
+    /* ---------- Download All Reports: modal + progress ---------- */
+    .rpt-card{background:#fff;border-radius:18px;width:100%;max-width:580px;max-height:94vh;overflow-y:auto;padding:22px 22px 20px;box-shadow:0 30px 60px -20px rgba(15,23,42,.45);border:1px solid var(--line)}
+    .rpt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+    .rpt-kicker{font-size:.62rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+    .rpt-title{font-size:1.25rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:2px 0 0;line-height:1.25}
+    .rpt-sub{font-size:.88rem;color:var(--ink-2);margin-top:2px;font-weight:600}
+    .rpt-summary{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
+    .rpt-chip{font-size:.74rem;font-weight:600;background:#eef4ff;color:#1e40af;border-radius:999px;padding:4px 10px}
+    .rpt-note{font-size:.76rem;color:var(--muted);margin:8px 0 0}
+    .rpt-or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 12px}
+    .rpt-or::before,.rpt-or::after{content:"";flex:1;height:1px;background:var(--line)}
+    .rpt-label{font-size:.8rem;font-weight:600;color:var(--ink-2);margin-bottom:6px;display:block}
+    .rpt-email-row{display:flex;gap:8px;flex-wrap:wrap}
+    .rpt-email-row .form-control{flex:1 1 200px;min-width:0}
+    .rpt-email-msg{min-height:1.3em;font-size:.82rem;margin-top:8px;color:#b91c1c;font-weight:600}
+    .rpt-bar-row{display:flex;align-items:center;gap:12px;margin:6px 0 6px}
+    .rpt-bar{flex:1;height:16px;background:#e2e8f0;border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(15,23,42,.08)}
+    .rpt-bar-fill{height:100%;width:0;border-radius:999px;transition:width .3s ease;
+      background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.2) 0 8px,transparent 8px 16px),linear-gradient(90deg,#2563eb,#14b8a6);
+      background-size:23px 100%,100% 100%;animation:rptStripes .9s linear infinite}
+    @keyframes rptStripes{from{background-position:0 0,0 0}to{background-position:23px 0,0 0}}
+    .rpt-pct{font-weight:800;font-size:1rem;color:#0b1f3a;min-width:3.2em;text-align:right;font-variant-numeric:tabular-nums}
+    .rpt-count{font-size:.78rem;color:var(--muted);font-weight:600}
+    .rpt-current{font-size:.9rem;font-weight:600;color:var(--ink);margin:4px 0 12px;min-height:1.4em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .rpt-stages{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+    .rpt-stage{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;font-size:.84rem;color:var(--ink-2);background:#fff}
+    .rpt-ico{width:18px;text-align:center;font-weight:800;color:#94a3b8;flex:0 0 18px}
+    .rpt-stage-label{flex:1}
+    .rpt-stage-count{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.78rem}
+    .rpt-stage[data-state=running]{border-color:#bfdbfe;background:#f5f9ff;color:var(--ink)}
+    .rpt-stage[data-state=running] .rpt-ico{width:12px;height:12px;margin:3px;border:2px solid #bfdbfe;border-top-color:#2563eb;border-radius:50%;animation:rptSpin .8s linear infinite;font-size:0}
+    .rpt-stage[data-state=done] .rpt-ico{color:#16a34a}
+    .rpt-stage[data-state=warn]{border-color:#fde68a}
+    .rpt-stage[data-state=warn] .rpt-ico{color:#d97706}
+    .rpt-stage[data-state=skipped]{opacity:.5}
+    @keyframes rptSpin{to{transform:rotate(360deg)}}
+    .rpt-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0 4px}
+    .rpt-stats > div{background:#f8fafc;border:1px solid var(--line-soft);border-radius:10px;padding:8px 10px}
+    .rpt-stats span{display:block;font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+    .rpt-stats b{font-size:.98rem;font-weight:800;color:#0b1f3a;font-variant-numeric:tabular-nums}
+    .rpt-log-title{font-size:.66rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:12px 0 4px}
+    .rpt-log{list-style:none;padding:0;margin:0;font-size:.8rem;min-height:40px}
+    .rpt-log li{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px dashed var(--line-soft)}
+    .rpt-log li:nth-child(n+3){opacity:.6}
+    .rpt-ok{color:#16a34a;font-weight:800}
+    .rpt-bad{color:#d97706;font-weight:800}
+    .rpt-log-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .rpt-log-meta{color:var(--muted);font-size:.74rem;white-space:nowrap}
+    .rpt-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+    .rpt-done{text-align:center}
+    .rpt-done-icon{width:58px;height:58px;border-radius:50%;background:#dcfce7;color:#15803d;font-size:28px;font-weight:800;display:flex;align-items:center;justify-content:center;margin:4px auto 10px}
+    .rpt-done-icon.is-warn{background:#fef3c7;color:#b45309}
+    .rpt-done-icon.is-error{background:#fee2e2;color:#b91c1c}
+    .rpt-done-icon.is-cancelled{background:#e2e8f0;color:#475569}
+    .rpt-failures{text-align:left;font-size:.8rem;color:#92400e;background:#fffbeb;border-radius:10px;padding:8px 12px;margin-top:12px;max-height:150px;overflow:auto}
+    .rpt-failures ul{margin:4px 0 0;padding-left:18px}
+    @media (max-width:576px){ .rpt-stats{grid-template-columns:repeat(2,1fr)} .rpt-card{padding:18px 16px} }
+</style>
 </head>
 
 <body>
@@ -414,10 +489,77 @@ font-weight:700;color:#1e3a8a;font-size:.74rem}
   </div>
 </div>
 
+<!-- Download All Reports: idle form, live progress, and finish/cancel/error views -->
+<div id="reportsModal" class="insight-modal-container" role="dialog" aria-modal="true" aria-labelledby="rptTitle">
+  <div class="rpt-card">
+    <div id="rptIdle">
+      <div class="rpt-head">
+        <div>
+          <div class="rpt-kicker">Scope export</div>
+          <h2 id="rptTitle" class="rpt-title">Download All Reports</h2>
+          <div id="rptDistrict" class="rpt-sub"></div>
+        </div>
+        <button type="button" class="btn-close" aria-label="Close" onclick="closeReportsModal()"></button>
+      </div>
+      <div id="rptSummary" class="rpt-summary"></div>
+      <button id="rptStartBtn" type="button" class="btn btn-danger w-100 fw-bold rounded-pill py-2" onclick="startAllReports()">Download All Reports (ZIP)</button>
+      <div class="rpt-note">Covers the whole district: District, Wing, Tehsil and school lists. Wing, tehsil and markaz filters are ignored.</div>
+      <div class="rpt-or"><span>or</span></div>
+      <label for="rptEmail" class="rpt-label">Email the reports</label>
+      <div class="rpt-email-row">
+        <input id="rptEmail" type="email" class="form-control" placeholder="Insert email" autocomplete="email">
+        <button type="button" class="btn btn-primary fw-bold rounded-pill px-3" onclick="emailAllReports()">Email All Reports</button>
+      </div>
+      <div id="rptEmailMsg" class="rpt-email-msg" role="status"></div>
+    </div>
+
+    <div id="rptProgress" hidden>
+      <div class="rpt-head">
+        <div>
+          <div class="rpt-kicker">Working</div>
+          <h2 class="rpt-title">Generating reports</h2>
+          <div id="rptPDistrict" class="rpt-sub"></div>
+        </div>
+      </div>
+      <div class="rpt-bar-row">
+        <div id="rptBar" class="rpt-bar" role="progressbar" aria-label="Overall progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="rptBarFill" class="rpt-bar-fill"></div></div>
+        <div id="rptPct" class="rpt-pct">0%</div>
+      </div>
+      <div id="rptCount" class="rpt-count">File 0 of 0</div>
+      <div id="rptCurrent" class="rpt-current" aria-live="polite">Starting…</div>
+      <ul id="rptStages" class="rpt-stages"></ul>
+      <div class="rpt-stats">
+        <div><span>Elapsed</span><b id="rptElapsed">0:00</b></div>
+        <div><span>Remaining</span><b id="rptEta">estimating…</b></div>
+        <div><span>CSV</span><b id="rptCsv">0</b></div>
+        <div><span>PDF</span><b id="rptPdf">0</b></div>
+      </div>
+      <div class="rpt-log-title">Recent activity</div>
+      <ul id="rptLog" class="rpt-log"></ul>
+      <div class="rpt-actions">
+        <button type="button" id="rptCancelBtn" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="cancelAllReports()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="rptDone" class="rpt-done" hidden>
+      <div id="rptDoneIcon" class="rpt-done-icon">✓</div>
+      <h2 id="rptDoneTitle" class="rpt-title">Reports ready</h2>
+      <div id="rptDoneInfo" class="rpt-sub"></div>
+      <div id="rptFailures" class="rpt-failures" hidden></div>
+      <div class="rpt-actions" style="justify-content:center">
+        <button type="button" id="rptAgainBtn" class="btn btn-outline-danger btn-sm rounded-pill px-3" onclick="downloadLastReport()">Download again</button>
+        <button type="button" class="btn btn-primary btn-sm rounded-pill px-3" onclick="closeReportsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="container py-3">
   <header class="dash-head">
     <div class="dash-head-main">
-      <img class="dash-emblem" src="sedp.jpeg" alt="SEDP logo" width="46" height="46">
+      <button type="button" id="reportsBtn" class="emblem-btn is-disabled" aria-label="Download all reports" aria-disabled="true" title="Select a district to download reports" onclick="openReportsModal()">
+        <img class="dash-emblem" src="sedp.jpeg" alt="" width="46" height="46">
+      </button>
       <div>
         <div class="dash-kicker">School Education Department &middot; Punjab</div>
         <h1 class="dash-title">Enrollment Monitoring Dashboard</h1>
@@ -619,6 +761,8 @@ if (window.Chart) {
   Chart.defaults.plugins.tooltip.bodyFont = { family: "'Inter', system-ui, sans-serif", size: 11 };
 }
 let fullTableData = [], currentPage = 1, currentFilterType = "all";
+/* Download All Reports: run state (declared up front; used by the report functions below). */
+let reportRunning = false, reportCancel = false, reportLastResult = null, reportLastDistrict = "";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => (Number(n) || 0).toLocaleString();
@@ -948,6 +1092,7 @@ function rebuildDropdowns() {
   fillSelect($("tehsil"), "Tehsil", tehsils.map((x) => [x, x]), t);
   fillSelect($("markaz"), "Markaz", mkKeys.map((k) => [k, nameCount[mk[k].m] > 1 ? `${mk[k].m} (${mk[k].w})` : mk[k].m]), mv);
   updateViewByDropdown();
+  syncReportsBtn();
 }
 
 function setupDropdowns() {
@@ -1092,6 +1237,23 @@ function renderStackedChart(key, canvasId, parentId, data, onClick) {
 }
 
 /* ---------------- Main table ---------------- */
+/* School-list predicates shared by the on-screen lists (loadTable) and the bulk report ZIP. */
+const LIST_PREDICATES = {
+  below_baseline: (s) => s.curT < s.basT,
+  below_target: (s) => s.curT < s.tarT,
+  above_baseline: (s) => s.curT >= s.basT,
+  above_baseline_below_target: (s) => s.curT >= s.basT && s.curT < s.tarT,
+  above_target: (s) => s.curT >= s.tarT,
+};
+
+/* School rows for one scope and list type ("all_schools" = every school in scope). */
+function schoolListFor(f, type) {
+  let rows = filterRows(f).map(schoolRow);
+  const keep = LIST_PREDICATES[type];
+  if (keep) rows = rows.filter(keep);
+  return rows;
+}
+
 function loadTable(type) {
   currentFilterType = type;
   const f = currentFilters();
@@ -1115,11 +1277,8 @@ function loadTable(type) {
   }
 
   /* Filters always decide on Totals (M/F/T all displayed). */
-  if (type === "below_baseline") tableData = tableData.filter((s) => s.curT < s.basT);
-  else if (type === "below_target") tableData = tableData.filter((s) => s.curT < s.tarT);
-  else if (type === "above_baseline") tableData = tableData.filter((s) => s.curT >= s.basT);
-  else if (type === "above_baseline_below_target") tableData = tableData.filter((s) => s.curT >= s.basT && s.curT < s.tarT);
-  else if (type === "above_target") tableData = tableData.filter((s) => s.curT >= s.tarT);
+  const keep = LIST_PREDICATES[type];
+  if (keep) tableData = tableData.filter(keep);
 
   fullTableData = tableData;
   sortData(); showTable(); updateKPIs(sumRows(filtered), filtered);
@@ -1181,7 +1340,12 @@ function showChart() { $("chartView").classList.remove("hidden"); $("tableView")
 
 /* ---------------- Insights ---------------- */
 function showInsights() {
-  const f = currentFilters();
+  fillInsights(currentFilters());
+  $("insightsModal").style.display = "flex";
+}
+
+/* Fills the Scope Intelligence modal for any filter object f = {d,w,t,m}. */
+function fillInsights(f, opts = {}) {
   /* Deepest chosen level decides the scope; Tehsil may be chosen without a Wing. */
   const scopeLevel = f.m ? 4 : f.t ? 3 : (f.d && f.w) ? 2 : f.d ? 1 : 0;
   const bcParts = ["<span>Punjab</span>"];
@@ -1228,11 +1392,10 @@ function showInsights() {
   if (CHARTS.donut) CHARTS.donut.destroy();
   CHARTS.donut = new Chart($("insightDonut"), {
     type: "doughnut", data: { labels: ["Below Baseline", "Below Target", "Above Target"], datasets: [{ data: [bb, bt, at], backgroundColor: ["#dc3545", "#ffc107", "#198754"], borderColor: "#ffffff", borderWidth: 3, hoverOffset: 6 }] },
-    options: { responsive: true, maintainAspectRatio: false, cutout: "65%", plugins: { legend: { display: false } } },
+    options: { responsive: true, maintainAspectRatio: false, cutout: "65%", ...(opts.animate === false ? { animation: false } : {}), plugins: { legend: { display: false } } },
   });
 
   buildDynamicSection(scopeLevel, filtered, f, stats, bb);
-  $("insightsModal").style.display = "flex";
 }
 
 function buildDynamicSection(scopeLevel, filtered, f, stats, schoolsBB) {
@@ -1390,17 +1553,24 @@ function exportToPDF() {
   doc.save(getExportFileName("pdf"));
 }
 
-function exportToCSV() {
-  const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
+/* CSV text for summary rows (kind "group") or school rows (kind "school"). Same layout as before. */
+function buildCsv(kind, rows) {
+  const isSchool = kind === "school";
   const header = "Sr.,District,Wing,Tehsil,Markaz,EMIS,School,Base M,Base F,Base T,Current M,Current F,Current T,Delta M,Delta F,Delta T,Target M,Target F,Target T,Ach M%,Ach F%,Ach T%\n";
   const headerG = "Sr.,Name,Base M,Base F,Base T,Current M,Current F,Current T,Delta M,Delta F,Delta T,Target M,Target F,Target T,Ach M%,Ach F%,Ach T%\n";
   let csv = isSchool ? header : headerG;
-  fullTableData.forEach((s, i) => {
+  rows.forEach((s, i) => {
     const core = `${s.basM},${s.basF},${s.basT},${s.curM},${s.curF},${s.curT},${dv(s.dM)},${dv(s.dF)},${dv(s.dT)},${s.tarM},${s.tarF},${s.tarT},${s.achM.toFixed(2)}%,${s.achF.toFixed(2)}%,${s.achT.toFixed(2)}%`;
     csv += isSchool
       ? `"${i + 1}","${s.dist}","${s.wing}","${s.teh}","${s.markaz}","${s.emis}","${s.name.replace(/"/g, '""')}",${core}\n`
       : `"${i + 1}","${s.name.replace(/"/g, '""')}",${core}\n`;
   });
+  return csv;
+}
+
+function exportToCSV() {
+  const isSchool = fullTableData.length > 0 && fullTableData[0].emis;
+  const csv = buildCsv(isSchool ? "school" : "group", fullTableData);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" }), link = document.createElement("a");
   link.href = URL.createObjectURL(blob); link.setAttribute("download", getExportFileName("csv")); link.click();
 }
@@ -1618,8 +1788,10 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAchIn
 window.addEventListener("resize", () => { const pop = $("achInfoPop"); if (pop && pop.classList.contains("show")) positionAchInfo(); });
 window.addEventListener("scroll", closeAchInfo, { passive: true });
 
-/* INSIGHT PDF EXPORT */
-function exportInsightPDF() {
+/* INSIGHT PDF EXPORT
+   insightPdfBlob() renders the live #captureArea to a one-page PDF and returns a Blob.
+   exportInsightPDF() (the "Export Full PDF" button) saves that PDF as before (PNG, scale 2). */
+function insightPdfBlob(opts = {}) {
   const { jsPDF } = window.jspdf;
   const captureArea = $("captureArea");
   const breadcrumb = $("insightBreadcrumb").innerText;
@@ -1627,9 +1799,10 @@ function exportInsightPDF() {
 
   const btns = document.querySelectorAll(".no-print");
   btns.forEach((b) => (b.style.opacity = "0"));
+  const restoreBtns = () => btns.forEach((b) => (b.style.opacity = "1"));
 
-  html2canvas(captureArea, {
-    scale: 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
+  return html2canvas(captureArea, {
+    scale: opts.scale || 2, useCORS: true, backgroundColor: "#f8fafc", logging: false,
     onclone: (clonedDoc) => {
       const area = clonedDoc.getElementById("captureArea");
       area.style.width = "1024px"; area.style.maxHeight = "none"; area.style.overflow = "visible";
@@ -1641,8 +1814,9 @@ function exportInsightPDF() {
       clonedDoc.querySelectorAll(".no-print").forEach((b) => (b.style.display = "none"));
     },
   }).then((canvas) => {
-    btns.forEach((b) => (b.style.opacity = "1"));
-    const imgData = canvas.toDataURL("image/png");
+    restoreBtns();
+    const imgFormat = opts.jpeg ? "JPEG" : "PNG";
+    const imgData = opts.jpeg ? canvas.toDataURL("image/jpeg", 0.85) : canvas.toDataURL("image/png");
     const pdf = new jsPDF("p", "mm", "a4");
     const pageWidth = pdf.internal.pageSize.getWidth();
     const margin = 10;
@@ -1650,14 +1824,415 @@ function exportInsightPDF() {
     const imgProps = pdf.getImageProperties(imgData);
     const pdfImgHeight = (imgProps.height * innerWidth) / imgProps.width;
     const finalDoc = new jsPDF({ orientation: "p", unit: "mm", format: [pageWidth, pdfImgHeight + margin * 2] });
-    finalDoc.addImage(imgData, "PNG", margin, margin, innerWidth, pdfImgHeight, undefined, "FAST");
-    finalDoc.save(getExportFileName("pdf"));
+    finalDoc.addImage(imgData, imgFormat, margin, margin, innerWidth, pdfImgHeight, undefined, "FAST");
+    return finalDoc.output("blob");
+  }, (err) => { restoreBtns(); throw err; });
+}
+
+function exportInsightPDF() {
+  insightPdfBlob().then((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = getExportFileName("pdf"); document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }).catch((err) => {
     console.error("Export Error:", err);
-    btns.forEach((b) => (b.style.opacity = "1"));
     alert("PDF export failed. Check console for details.");
   });
 }
+
+/* ---------------- Download All Reports (district ZIP) ----------------
+   One ZIP per district, built in the browser from MASTER_DATA: CSV tables, Insight PDFs and
+   school lists. Every item works on an explicit {d,w,t} filter, so the live filters, chart and
+   table are never changed. Items are produced one at a time, so the page stays responsive. */
+const REPORT_WINGS = ["M-EE", "W-EE", "SE"];
+const REPORT_STAGES = ["Wing-wise summary", "District scope intelligence", "District all schools", "Wing reports", "Tehsil reports", "School lists", "Packaging ZIP"];
+const REPORT_ICONS = { pending: "○", running: "", done: "✓", warn: "⚠", skipped: "–" };
+class ReportCancelled extends Error {}
+
+const waitPaint = () => new Promise((resolve) => setTimeout(resolve, 30));
+const pad2 = (n) => String(n).padStart(2, "0");
+const sanitizeName = (s) => String(s).replace(/[\/\\:*?"<>|]/g, "").trim().replace(/\s+/g, "_");
+const pktDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Karachi" }).format(new Date());
+const pdfScale = () => (window.matchMedia && window.matchMedia("(max-width: 768px)").matches ? 1.5 : 2);
+const fmtMB = (bytes) => (bytes / 1048576).toFixed(bytes >= 1048576 ? 1 : 2) + " MB";
+const fmtKB = (bytes) => (bytes / 1024).toFixed(1) + " KB";
+const fmtClock = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + pad2(s % 60); };
+
+function reportWings(d) { return REPORT_WINGS.filter((w) => MASTER_DATA.some((r) => r.d === d && r.w === w)); }
+function reportTehsils(d, w) { return [...new Set(MASTER_DATA.filter((r) => r.d === d && r.w === w).map((r) => r.t))].sort(); }
+
+/* Ordered list of every file in the ZIP. Items are lazy: make() runs only when it is reached. */
+function buildReportPlan(d) {
+  const tasks = [];
+  const csvTask = (stage, path, toText) => tasks.push({
+    stage, path, kind: "csv",
+    make: async () => new Blob([toText()], { type: "text/csv;charset=utf-8;" }),
+  });
+  const pdfTask = (stage, path, f) => tasks.push({
+    stage, path, kind: "pdf",
+    make: async () => {
+      fillInsights(f, { animate: false });
+      await waitPaint(); await waitPaint();
+      return insightPdfBlob({ scale: pdfScale(), jpeg: true });
+    },
+  });
+  const groupCsv = (stage, path, f) => csvTask(stage, path, () => buildCsv("group", groupAtLevel(filterRows(f), f)));
+  const schoolCsv = (stage, path, f, type) => csvTask(stage, path, () => buildCsv("school", schoolListFor(f, type)));
+
+  /* District level */
+  groupCsv(1, "01_Wing_Wise_Summary.csv", { d });
+  pdfTask(2, "02_District_Scope_Intelligence.pdf", { d });
+  schoolCsv(3, "03_District_All_Schools.csv", { d }, "all_schools");
+
+  /* Wing level (fixed order M-EE, W-EE, SE; folders 04-06) */
+  for (const w of reportWings(d)) {
+    const wn = sanitizeName(w);
+    const wf = pad2(4 + REPORT_WINGS.indexOf(w)) + "_Wing_" + wn + "/";
+    const fw = { d, w };
+    groupCsv(4, wf + "Wing_" + wn + ".csv", fw);
+    pdfTask(4, wf + "Wing_" + wn + "_Insight.pdf", fw);
+    schoolCsv(4, wf + "Wing_" + wn + "_All_Schools.csv", fw, "all_schools");
+
+    if (w === "SE") {
+      /* Secondary wing stops at wing level: school lists only, no tehsil folders. */
+      schoolCsv(6, wf + "Below_Baseline_Schools.csv", fw, "below_baseline");
+      schoolCsv(6, wf + "Above_Baseline_Below_Target_Schools.csv", fw, "above_baseline_below_target");
+      continue;
+    }
+    for (const t of reportTehsils(d, w)) {
+      const tn = sanitizeName(t);
+      const tf = wf + "Tehsil_" + tn + "/";
+      const ft = { d, w, t };
+      groupCsv(5, tf + "Tehsil_" + tn + ".csv", ft);
+      pdfTask(5, tf + "Tehsil_" + tn + "_Insight.pdf", ft);
+      schoolCsv(6, tf + "Tehsil_" + tn + "_All_Schools.csv", ft, "all_schools");
+      schoolCsv(6, tf + "Below_Baseline_Schools.csv", ft, "below_baseline");
+      schoolCsv(6, tf + "Above_Baseline_Below_Target_Schools.csv", ft, "above_baseline_below_target");
+    }
+  }
+  return tasks;
+}
+
+function buildReadme(d, counts, failures) {
+  const lines = [
+    "SED Punjab Enrollment Dashboard - All Reports",
+    "",
+    "District: " + d,
+    "Generated: " + new Date().toLocaleString("en-PK", { dateStyle: "full", timeStyle: "short", timeZone: "Asia/Karachi" }) + " (PKT)",
+    "Data fetched: " + (META && META.fetched_at_pkt ? META.fetched_at_pkt : "unknown"),
+    "Data reference date (PKT): " + (META && META.ref_date_pkt ? META.ref_date_pkt : "unknown"),
+    "Day-change status: " + DELTA.state + (DELTA.reason ? " - " + DELTA.reason : ""),
+    "",
+    "Scope: whole district. Wing, tehsil and markaz filters are ignored.",
+    "Files: " + (counts.csv + counts.pdf) + " (CSV " + counts.csv + ", PDF " + counts.pdf + ")",
+    "",
+  ];
+  if (failures.length) {
+    lines.push("Files that could not be created:");
+    failures.forEach((f) => lines.push("  - " + f.path + " (" + f.error + ")"));
+  } else {
+    lines.push("Files that could not be created: none");
+  }
+  return lines.join("\r\n") + "\r\n";
+}
+
+/* Show or hide the logo button. It is disabled until a district is picked and while a run is active. */
+function syncReportsBtn() {
+  const btn = $("reportsBtn");
+  if (!btn) return;
+  const d = $("district") ? $("district").value : "";
+  const enabled = !!d && !reportRunning;
+  btn.classList.toggle("is-disabled", !enabled);
+  btn.setAttribute("aria-disabled", enabled ? "false" : "true");
+  btn.title = reportRunning ? "Report generation in progress" : d ? "Download all reports for " + d : "Select a district to download reports";
+  if (d && d !== reportLastDistrict && !reportRunning) {
+    btn.classList.remove("pulse-once"); void btn.offsetWidth; btn.classList.add("pulse-once");
+  }
+  reportLastDistrict = d;
+}
+
+function showReportView(name) {
+  $("rptIdle").hidden = name !== "idle";
+  $("rptProgress").hidden = name !== "progress";
+  $("rptDone").hidden = name !== "done";
+}
+
+function openReportsModal() {
+  const d = $("district").value;
+  if (!d) return;
+  if (!reportRunning) {
+    const plan = buildReportPlan(d);
+    const wings = reportWings(d);
+    const tehsils = wings.filter((w) => w !== "SE").reduce((n, w) => n + reportTehsils(d, w).length, 0);
+    const schools = MASTER_DATA.reduce((n, r) => n + (r.d === d ? 1 : 0), 0);
+    $("rptDistrict").innerText = d;
+    $("rptSummary").innerHTML = [wings.length + " wings", tehsils + " tehsils", fmt(schools) + " schools", plan.length + " files"]
+      .map((t) => `<span class="rpt-chip">${escHtml(t)}</span>`).join("");
+    $("rptEmailMsg").innerText = "";
+    showReportView("idle");
+  }
+  $("reportsModal").style.display = "flex";
+}
+
+function closeReportsModal() {
+  if (reportRunning) return;
+  $("reportsModal").style.display = "none";
+}
+
+function emailAllReports() {
+  $("rptEmailMsg").innerText = "Email feature not available yet.";
+}
+
+/* Insight rendering for bulk PDFs: the real #insightsModal is kept rendered but moved off-screen,
+   so html2canvas can measure it without the user seeing it. */
+function setBulkInsightsStage(on) {
+  const m = $("insightsModal");
+  if (on) { m.style.display = "flex"; m.style.left = "-10000px"; }
+  else { m.style.display = "none"; m.style.left = ""; }
+}
+
+/* ---- Progress view ---- */
+let RV = null;
+
+function rvSetStage(stage, state) {
+  const li = $("rptStage" + stage);
+  if (!li) return;
+  RV.stageState[stage - 1] = state;
+  li.dataset.state = state;
+  li.querySelector(".rpt-ico").innerText = REPORT_ICONS[state];
+}
+function rvSetBar(pct) {
+  const p = Math.max(0, Math.min(100, pct));
+  $("rptBarFill").style.width = p + "%";
+  $("rptBar").setAttribute("aria-valuenow", String(Math.round(p)));
+  $("rptPct").innerText = Math.round(p) + "%";
+}
+function describeTask(task) {
+  return task.path.replace(/\.(csv|pdf)$/i, "").replace(/\/$/, "").split("/").map((s) => s.replace(/_/g, " ")).join(" \u203A ");
+}
+
+function rvInit(d, tasks, stageTotals) {
+  RV = {
+    t0: Date.now(), total: tasks.length, done: 0, csv: 0, pdf: 0, pdfTotal: tasks.filter((t) => t.kind === "pdf").length,
+    pdfDone: 0, pdfMs: 0, stageTotals, stageDone: REPORT_STAGES.map(() => 0), stageFail: REPORT_STAGES.map(() => 0),
+    stageState: REPORT_STAGES.map(() => "pending"), timer: null,
+  };
+  $("rptStages").innerHTML = REPORT_STAGES.map((label, i) =>
+    `<li class="rpt-stage" id="rptStage${i + 1}" data-state="pending"><span class="rpt-ico" aria-hidden="true">○</span>` +
+    `<span class="rpt-stage-label">${escHtml(label)}</span><span class="rpt-stage-count">${stageTotals[i] ? "0/" + stageTotals[i] : "–"}</span></li>`
+  ).join("");
+  REPORT_STAGES.forEach((_, i) => { if (!stageTotals[i]) rvSetStage(i + 1, "skipped"); });
+  rvSetBar(0);
+  $("rptCount").innerText = "File 0 of " + RV.total;
+  $("rptCurrent").innerText = "Starting…";
+  $("rptLog").innerHTML = "";
+  $("rptCsv").innerText = "0"; $("rptPdf").innerText = "0";
+  $("rptEta").innerText = "estimating…";
+  $("rptElapsed").innerText = "0:00";
+  RV.timer = setInterval(rvTick, 1000);
+}
+
+function rvTick() {
+  if (!RV) return;
+  $("rptElapsed").innerText = fmtClock(Date.now() - RV.t0);
+  if (RV.done >= RV.total) return;
+  if (RV.pdfDone === 0) return;
+  const remPdf = RV.pdfTotal - RV.pdfDone;
+  const remCsv = (RV.total - RV.done) - remPdf;
+  const avg = RV.pdfMs / RV.pdfDone;
+  $("rptEta").innerText = "~" + fmtClock(remPdf * avg + remCsv * 40);
+}
+
+function rvStart(i, task) {
+  if (RV.stageState[task.stage - 1] === "pending") rvSetStage(task.stage, "running");
+  $("rptCount").innerText = "File " + (i + 1) + " of " + RV.total;
+  $("rptCurrent").innerText = (task.kind === "pdf" ? "Generating insight PDF \u00B7 " : "Building CSV \u00B7 ") + describeTask(task);
+}
+
+function rvDone(i, task, res) {
+  RV.done++;
+  const s = task.stage - 1;
+  RV.stageDone[s]++;
+  if (!res.ok) RV.stageFail[s]++;
+  if (res.ok) RV[task.kind]++;
+  if (task.kind === "pdf") { RV.pdfDone++; RV.pdfMs += res.ms; }
+
+  const li = $("rptStage" + task.stage);
+  li.querySelector(".rpt-stage-count").innerText = RV.stageDone[s] + "/" + RV.stageTotals[s];
+  if (RV.stageDone[s] >= RV.stageTotals[s]) rvSetStage(task.stage, RV.stageFail[s] ? "warn" : "done");
+
+  $("rptCsv").innerText = fmt(RV.csv);
+  $("rptPdf").innerText = fmt(RV.pdf);
+  rvSetBar((RV.done / RV.total) * 90);
+
+  const row = document.createElement("li");
+  const meta = !res.ok ? "failed" : task.kind === "pdf" ? (res.ms / 1000).toFixed(1) + " s" : fmtKB(res.size);
+  row.innerHTML = `<span class="${res.ok ? "rpt-ok" : "rpt-bad"}">${res.ok ? "✓" : "⚠"}</span>` +
+    `<span class="rpt-log-name">${escHtml(describeTask(task))}</span><span class="rpt-log-meta">${meta}</span>`;
+  const log = $("rptLog");
+  log.prepend(row);
+  while (log.children.length > 5) log.lastElementChild.remove();
+  rvTick();
+}
+
+function rvPackaging() {
+  rvSetStage(7, "running");
+  $("rptCount").innerText = "Packaging";
+  $("rptCurrent").innerText = "Compressing the ZIP…";
+  $("rptEta").innerText = "almost done";
+}
+
+function rvZip(percent) {
+  rvSetBar(90 + percent * 0.1);
+  $("rptCurrent").innerText = "Compressing the ZIP \u00B7 " + Math.round(percent) + "%";
+}
+
+function rvFinish() {
+  if (RV) { clearInterval(RV.timer); }
+  rvSetStage(7, "done");
+  rvSetBar(100);
+  $("rptCurrent").innerText = "Done";
+}
+
+/* ---- Run ---- */
+async function runAllReports(d) {
+  const tasks = buildReportPlan(d);
+  const stageTotals = REPORT_STAGES.map((_, i) => tasks.filter((t) => t.stage === i + 1).length);
+  stageTotals[6] = 1; /* packaging counts as one step */
+  rvInit(d, tasks, stageTotals);
+
+  const zip = new JSZip();
+  const counts = { csv: 0, pdf: 0 }, failures = [];
+  setBulkInsightsStage(true);
+  try {
+    for (let i = 0; i < tasks.length; i++) {
+      if (reportCancel) throw new ReportCancelled();
+      const task = tasks[i];
+      rvStart(i, task);
+      const t0 = performance.now();
+      let res;
+      try {
+        const blob = await task.make();
+        zip.file(task.path, blob);
+        counts[task.kind]++;
+        res = { ok: true, ms: performance.now() - t0, size: blob.size };
+      } catch (err) {
+        console.error("Report item failed:", task.path, err);
+        failures.push({ path: task.path, error: String((err && err.message) || err) });
+        res = { ok: false, ms: performance.now() - t0, size: 0 };
+      }
+      rvDone(i, task, res);
+      await waitPaint();
+    }
+  } finally {
+    setBulkInsightsStage(false);
+  }
+  if (reportCancel) throw new ReportCancelled();
+
+  rvPackaging();
+  zip.file("00_README.txt", buildReadme(d, counts, failures));
+  const blob = await zip.generateAsync(
+    { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
+    (meta) => rvZip(meta.percent)
+  );
+  return { blob, name: sanitizeName(d) + "_All_Reports_" + pktDate() + ".zip", counts, failures };
+}
+
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function setDoneIcon(kind) {
+  const el = $("rptDoneIcon");
+  const icons = { ok: "✓", warn: "!", cancelled: "–", error: "✕" };
+  el.className = "rpt-done-icon" + (kind === "ok" ? "" : " is-" + (kind === "warn" ? "warn" : kind === "error" ? "error" : "cancelled"));
+  el.innerText = icons[kind];
+}
+
+function showReportDone(res) {
+  const failed = res.failures.length > 0;
+  setDoneIcon(failed ? "warn" : "ok");
+  $("rptDoneTitle").innerText = failed ? "Reports ready, with warnings" : "Reports ready";
+  $("rptDoneInfo").innerText = fmt(res.counts.csv + res.counts.pdf) + " files \u00B7 " + res.counts.csv + " CSV \u00B7 " +
+    res.counts.pdf + " PDF \u00B7 " + fmtMB(res.blob.size) + " ZIP";
+  const box = $("rptFailures");
+  box.hidden = !failed;
+  box.innerHTML = failed
+    ? "<strong>" + res.failures.length + " file(s) could not be created:</strong><ul>" +
+      res.failures.map((f) => "<li>" + escHtml(f.path) + "</li>").join("") + "</ul>"
+    : "";
+  $("rptAgainBtn").hidden = false;
+  showReportView("done");
+  triggerDownload(res.blob, res.name);
+}
+
+function showReportEnd(kind, title, info) {
+  setDoneIcon(kind);
+  $("rptDoneTitle").innerText = title;
+  $("rptDoneInfo").innerText = info;
+  $("rptFailures").hidden = true;
+  $("rptAgainBtn").hidden = true;
+  showReportView("done");
+}
+
+function downloadLastReport() {
+  if (reportLastResult) triggerDownload(reportLastResult.blob, reportLastResult.name);
+}
+
+async function startAllReports() {
+  const d = $("district").value;
+  if (!d || reportRunning) return;
+  reportRunning = true; reportCancel = false; reportLastResult = null;
+  syncReportsBtn();
+  $("rptPDistrict").innerText = d;
+  $("rptCancelBtn").disabled = false;
+  showReportView("progress");
+  try {
+    const result = await runAllReports(d);
+    rvFinish();
+    reportLastResult = result;
+    showReportDone(result);
+  } catch (err) {
+    if (err instanceof ReportCancelled) {
+      showReportEnd("cancelled", "Cancelled", "The report was stopped. No ZIP was created.");
+    } else {
+      console.error("All-reports export failed:", err);
+      showReportEnd("error", "Could not create the ZIP", "Something went wrong while building the reports. Please try again.");
+    }
+  } finally {
+    if (RV) { clearInterval(RV.timer); RV = null; }
+    reportRunning = false;
+    syncReportsBtn();
+  }
+}
+
+function cancelAllReports() {
+  if (!reportRunning || reportCancel) return;
+  if (!confirm("Stop generating the reports? No ZIP will be downloaded.")) return;
+  reportCancel = true;
+  $("rptCancelBtn").disabled = true;
+  $("rptCurrent").innerText = "Stopping after the current file…";
+}
+
+function initReportsButton() {
+  const btn = $("reportsBtn");
+  btn.addEventListener("animationend", () => btn.classList.remove("pulse-once"));
+  btn.addEventListener("pointerdown", () => {
+    if (!btn.classList.contains("is-disabled") && navigator.vibrate) navigator.vibrate(10);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("reportsModal").style.display === "flex") closeReportsModal();
+  });
+  window.addEventListener("beforeunload", (e) => {
+    if (reportRunning) { e.preventDefault(); e.returnValue = ""; }
+  });
+  syncReportsBtn();
+}
+initReportsButton();
 </script>
 
 </body>
