@@ -382,10 +382,62 @@ font-weight:700;color:#1e3a8a;font-size:.74rem}
     .rpt-failures{text-align:left;font-size:.8rem;color:#92400e;background:#fffbeb;border-radius:10px;padding:8px 12px;margin-top:12px;max-height:150px;overflow:auto}
     .rpt-failures ul{margin:4px 0 0;padding-left:18px}
     @media (max-width:576px){ .rpt-stats{grid-template-columns:repeat(2,1fr)} .rpt-card{padding:18px 16px} }
+
+    /* ---------- Startup notice (data/notice.json) ---------- */
+    .notice-container{z-index:5000}
+    .notice-card{background:#fff;width:100%;max-width:520px;border-radius:18px;padding:24px;
+      box-shadow:0 30px 60px -20px rgba(15,23,42,.45);border:1px solid var(--line);border-top:4px solid #d97706}
+    .notice-card[data-type="info"]{border-top-color:#2563eb}
+    .notice-card[data-type="warning"]{border-top-color:#d97706}
+    .notice-card[data-type="critical"]{border-top-color:#dc2626}
+    .notice-head{display:flex;align-items:flex-start;gap:12px}
+    .notice-icon{flex:0 0 auto;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-size:1.25rem;font-weight:800;line-height:1;background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+    .notice-card[data-type="info"] .notice-icon{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+    .notice-card[data-type="warning"] .notice-icon{background:#fffbeb;color:#b45309;border-color:#fde68a}
+    .notice-card[data-type="critical"] .notice-icon{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+    .notice-head-text{flex:1 1 auto;min-width:0}
+    .notice-badge{display:inline-block;font-size:.62rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+      border-radius:999px;padding:3px 9px;background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+    .notice-card[data-type="info"] .notice-badge{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+    .notice-card[data-type="warning"] .notice-badge{background:#fffbeb;color:#b45309;border-color:#fde68a}
+    .notice-card[data-type="critical"] .notice-badge{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+    .notice-title{font-size:1.22rem;font-weight:800;letter-spacing:-.02em;color:#0b1f3a;margin:6px 0 0;line-height:1.25;overflow-wrap:break-word}
+    .notice-message{font-size:.92rem;line-height:1.6;color:var(--ink-2);margin:14px 0 18px;white-space:pre-line;overflow-wrap:break-word}
+    .notice-bar{height:8px;background:#eef1f7;border-radius:999px;overflow:hidden}
+    .notice-bar-fill{height:100%;width:100%;border-radius:999px;background:#d97706}
+    .notice-card[data-type="info"] .notice-bar-fill{background:#2563eb}
+    .notice-card[data-type="warning"] .notice-bar-fill{background:#d97706}
+    .notice-card[data-type="critical"] .notice-bar-fill{background:#dc2626}
+    .notice-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .notice-countdown{font-size:.78rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+    @media (max-width:575.98px){ .notice-card{padding:20px 18px} .notice-title{font-size:1.08rem} }
 </style>
 </head>
 
 <body>
+
+<!-- Startup notice: shown only when data/notice.json has "enabled": true (see data/README.md) -->
+<div id="noticeModal" class="insight-modal-container notice-container" role="dialog" aria-modal="true" aria-labelledby="noticeTitle" aria-describedby="noticeMessage">
+  <div class="notice-card" id="noticeCard" data-type="warning">
+    <div class="notice-head">
+      <div class="notice-icon" id="noticeIcon" aria-hidden="true">!</div>
+      <div class="notice-head-text">
+        <span id="noticeType" class="notice-badge">Warning</span>
+        <h2 id="noticeTitle" class="notice-title">Dashboard Notice</h2>
+      </div>
+      <button type="button" class="btn-close" aria-label="Close notification" onclick="closeNotice()"></button>
+    </div>
+    <p id="noticeMessage" class="notice-message"></p>
+    <div class="notice-bar" role="progressbar" aria-label="Time until this notification closes" aria-valuemin="0" aria-valuemax="30" aria-valuenow="30" id="noticeBar">
+      <div id="noticeBarFill" class="notice-bar-fill"></div>
+    </div>
+    <div class="notice-foot">
+      <span id="noticeCountdown" class="notice-countdown">Auto-closing in 30s</span>
+      <button type="button" id="noticeCloseBtn" class="btn btn-primary btn-sm rounded-pill px-4" onclick="closeNotice()">Close</button>
+    </div>
+  </div>
+</div>
 
 <div id="insightsModal" class="insight-modal-container">
   <div class="insight-content" id="captureArea">
@@ -763,6 +815,8 @@ if (window.Chart) {
 let fullTableData = [], currentPage = 1, currentFilterType = "all";
 /* Download All Reports: run state (declared up front; used by the report functions below). */
 let reportRunning = false, reportCancel = false, reportLastResult = null, reportLastDistrict = "";
+/* Startup notice (data/notice.json): countdown timer + session key of the shown notice. */
+let noticeTimer = null, noticeDeadline = 0, noticeDuration = 30, noticeSessionKey = "";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => (Number(n) || 0).toLocaleString();
@@ -811,6 +865,83 @@ function showErrorBanner(msg) {
   if (b) b.style.display = "flex";
 }
 function hideErrorBanner() { const b = $("errorBanner"); if (b) b.style.display = "none"; }
+
+/* ------- Startup notice (controlled by data/notice.json) -------
+   Hidden by default: nothing is shown unless that file has "enabled": true
+   with a title/message. Shown once per browser session (a new "id" in the
+   file re-shows it), auto-closes after durationSeconds (default 30), and
+   can be closed early with the Close / × buttons or Escape. Clicking the
+   dark backdrop does NOT dismiss it. See data/README.md for how to use it. */
+const NOTICE_PATH = "data/notice.json";
+const NOTICE_TYPES = {
+  info: { label: "Information", icon: "i" },
+  warning: { label: "Warning", icon: "!" },
+  critical: { label: "Critical Alert", icon: "!" },
+};
+async function loadNotice() {
+  try {
+    const resp = await fetch(NOTICE_PATH, { cache: "no-store" });
+    if (!resp.ok) return; /* missing file = no notice */
+    const notice = await resp.json();
+    if (!notice || notice.enabled !== true) return;
+    const title = String(notice.title == null ? "" : notice.title).trim();
+    const message = String(notice.message == null ? "" : notice.message).trim();
+    if (!title && !message) return;
+    const type = NOTICE_TYPES[String(notice.type || "").toLowerCase()] ? String(notice.type).toLowerCase() : "warning";
+    const secs = Number(notice.durationSeconds);
+    const duration = Number.isFinite(secs) && secs > 0 ? Math.min(300, Math.max(5, Math.round(secs))) : 30;
+    /* Once per session: remember this notice as shown (keyed by its id, or
+       by its content when no id is set) so refreshes in the same session
+       don't pop it up again. A changed id/content shows it again. */
+    const id = String(notice.id == null ? "" : notice.id).trim() || (type + "|" + title + "|" + message);
+    noticeSessionKey = "sedpNoticeShown:" + id;
+    try { if (sessionStorage.getItem(noticeSessionKey)) return; } catch (e) { /* storage unavailable: show anyway */ }
+    showNotice({ type, title: title || "Dashboard Notice", message, duration });
+  } catch (e) {
+    console.warn("[notice] ignoring unreadable " + NOTICE_PATH + ":", e && e.message ? e.message : e);
+  }
+}
+function showNotice(notice) {
+  const modal = $("noticeModal"), card = $("noticeCard");
+  if (!modal || !card) return;
+  const meta = NOTICE_TYPES[notice.type] || NOTICE_TYPES.warning;
+  card.dataset.type = notice.type;
+  $("noticeIcon").innerText = meta.icon;
+  $("noticeType").innerText = meta.label;
+  $("noticeTitle").innerText = notice.title;
+  $("noticeMessage").innerText = notice.message;
+  noticeDuration = notice.duration;
+  noticeDeadline = Date.now() + notice.duration * 1000;
+  /* Mark as shown for this session as soon as it appears, so even a refresh
+     while it is still counting down does not show it a second time. */
+  try { if (noticeSessionKey) sessionStorage.setItem(noticeSessionKey, "1"); } catch (e) { /* ignore */ }
+  modal.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  updateNoticeCountdown();
+  if (noticeTimer) clearInterval(noticeTimer);
+  noticeTimer = setInterval(updateNoticeCountdown, 200);
+  const btn = $("noticeCloseBtn");
+  if (btn) btn.focus();
+}
+function updateNoticeCountdown() {
+  const remainingMs = noticeDeadline - Date.now();
+  const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+  const label = $("noticeCountdown"), fill = $("noticeBarFill"), bar = $("noticeBar");
+  if (label) label.innerText = "Auto-closing in " + remaining + "s";
+  if (fill) fill.style.width = (noticeDuration ? (remaining / noticeDuration) * 100 : 0) + "%";
+  if (bar) { bar.setAttribute("aria-valuemax", String(noticeDuration)); bar.setAttribute("aria-valuenow", String(remaining)); }
+  if (remainingMs <= 0) closeNotice();
+}
+function closeNotice() {
+  if (noticeTimer) { clearInterval(noticeTimer); noticeTimer = null; }
+  const modal = $("noticeModal");
+  if (modal) modal.style.display = "none";
+  document.body.style.overflow = "";
+}
+document.addEventListener("keydown", (e) => {
+  const modal = $("noticeModal");
+  if (e.key === "Escape" && modal && modal.style.display === "flex") closeNotice();
+});
 
 /* ------- KPI figure "odometer" animation -------
    Spin phase (data still loading): every KPI figure - including the
@@ -971,7 +1102,7 @@ async function loadInitialData() {
   }
 }
 function retryLoad() { loadInitialData(); }
-window.onload = () => { loadInitialData(); };
+window.onload = () => { loadInitialData(); loadNotice(); };
 
 /* Size each KPI figure as large as possible while keeping its label readable.
    Base sizes apply when figures are short; long (9-10 digit) values shrink only

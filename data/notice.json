@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "id": "2026-10-example",
+  "type": "warning",
+  "title": "Dashboard Notice",
+  "message": "Example: Enrollment data may be delayed today. Please check back later.",
+  "durationSeconds": 30
+}
