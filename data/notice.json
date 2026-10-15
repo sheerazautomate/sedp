@@ -1,8 +1,8 @@
 {
-  "enabled": false,
-  "id": "2026-10-example",
-  "type": "warning",
-  "title": "Dashboard Notice",
-  "message": "Example: Enrollment data may be delayed today. Please check back later.",
+  "enabled": true,
+  "id": "2026-10-15",
+  "type": "critical",
+  "title": "Grades Dashboard Down",
+  "message": "Grades Official Dashboard's access has been revoked due to public data leak to media channels. The dashboard will not update till we receive new credentials. Dashboard won't update till then. Regards.",
   "durationSeconds": 30
 }
