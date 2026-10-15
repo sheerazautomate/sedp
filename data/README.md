@@ -48,6 +48,13 @@ bar ("Auto-closing in 30s"), and can be closed early with the Close / ×
 buttons or Escape; clicking outside it does not dismiss it. To stop showing
 it, set `"enabled": false` and push again.
 
+While `"enabled": true`, the small light beside the masthead's
+`Last sync: … • N schools` chip also turns **red** instead of green. Unlike
+the modal it is not limited to once per session — it stays red on every
+visit until the notice is switched off, so users can still see the data is
+flagged as not updating after they dismiss the popup. Setting
+`"enabled": false` turns the light green again.
+
 ## Secrets required
 
 `Settings -> Secrets and variables -> Actions`:
