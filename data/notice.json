@@ -2,7 +2,7 @@
   "enabled": true,
   "id": "2026-10-15",
   "type": "critical",
-  "title": "Grades Dashboard Down",
-  "message": "Grades Official Dashboard's access has been revoked due to public data leak to media channels. The dashboard will not update till we receive new credentials. Dashboard won't update till then. Regards.",
+  "title": "GRADES Dashboard Access Revoked",
+  "message": "GRADES Official Dashboard (provided by PMIU) that was being used as data source for this dashboard has revoked public access. Dashboard will not be updated till I get access again. For more info +923347667999. Regards",
   "durationSeconds": 30
 }
