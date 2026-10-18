@@ -45,12 +45,16 @@ or **Synced from Grades** and shows that source's last sync time.
 
 The SIS fetcher reads `school_ids.jsonl` and calls the public
 `/dashboard_revamp/get_gender_summary_pie` endpoint once per mapped school (about
-38,128 SIS requests per full run with the current file). It uses six concurrent
-workers with retries; if more than 0.5% of mapped schools fail, the workflow
-keeps the previous snapshot. No SIS credentials or browser-session cookies are
-stored. The workflow is scheduled every two hours and can also be run manually
-from **Actions → Fetch SIS enrollment**. A manual `dry_run` validates the
-mapping file without contacting SIS or writing data.
+38,128 SIS requests per full run with the current file). If a school's response
+is all zero, it checks that EMIS against the live DTMS endpoint; when the IDs
+have changed, it retries with the current IDs for that run and adjusts that
+school's same-day reference to avoid a false day-change spike. The refreshed
+IDs are used in-memory for that run; `school_ids.jsonl` remains the maintained
+input file. It uses six concurrent workers with retries; if more than 0.5% of
+mapped schools fail, the workflow keeps the previous snapshot. No SIS credentials or
+browser-session cookies are stored. The workflow is scheduled every two hours
+and can also be run manually from **Actions → Fetch SIS enrollment**. A manual
+`dry_run` validates the mapping file without contacting SIS or writing data.
 
 The DTMS mapping currently has a few entries with `status: "missing"`; those
 cannot be queried by school ID and will use the Grades current value in SIS
