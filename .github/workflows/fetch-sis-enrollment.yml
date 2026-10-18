@@ -1,0 +1,82 @@
+name: Fetch SIS enrollment
+
+# The public SIS dashboard supplies current school-level gender totals. Grades
+# remains the source for baseline, target, and school dimensions in the dashboard.
+# Like the Grades sync, run every two hours in PKT; the first successful SIS run
+# of each PKT day becomes that day's reference snapshot for day-change figures.
+
+on:
+  schedule:
+    # Every two hours; 19:05 UTC is 00:05 PKT.
+    - cron: "5 1,3,5,7,9,11,13,15,17,19,21,23 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate DTMS mappings only; do not call SIS or write files"
+        required: false
+        default: "false"
+      force_reference:
+        description: "Pin this run as today's SIS reference snapshot"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-sis-enrollment
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Scrape SIS gender enrollment
+        env:
+          DATA_DIR: data
+          SIS_WORKERS: "6"
+          SIS_REQUEST_DELAY_SECONDS: "0.05"
+          FORCE_REFERENCE: ${{ inputs.force_reference }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/fetch_sis.py --dry-run
+          else
+            python scripts/fetch_sis.py
+          fi
+
+      - name: Commit SIS data files
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/sis_enrollment.json data/sis_enrollment_prev.json data/sis_meta.json
+          if git diff --cached --quiet; then
+            echo "No SIS data changes."
+            exit 0
+          fi
+          SYNC_TYPE=$(python3 -c "import json; print(json.load(open('data/sis_meta.json')).get('sync_type', 'sync'))")
+          git commit -m "SIS enrollment ${SYNC_TYPE} update ($(date -u +%F) $(date -u +%H:%M)Z)"
+          # The Grades workflow may update other data files at the same time.
+          # Rebase our non-overlapping SIS files onto the latest default branch
+          # before pushing to avoid a lost update on concurrent scheduled runs.
+          for attempt in 1 2 3; do
+            git fetch origin "$GITHUB_REF_NAME:refs/remotes/origin/$GITHUB_REF_NAME"
+            git rebase "origin/$GITHUB_REF_NAME"
+            if git push origin "HEAD:$GITHUB_REF_NAME"; then
+              exit 0
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "Could not push SIS data after three attempts." >&2
+          exit 1
