@@ -169,15 +169,49 @@ def find_csrf_token(session: requests.Session, seed_emis: str) -> str:
     return str(token)
 
 
+def refresh_dtms_mapping(
+    session: requests.Session,
+    emis: str,
+) -> dict[str, str] | None:
+    """Read a school's current DTMS IDs; old Markaz links can become stale."""
+    response = session.get(
+        DTMS_URL,
+        params={"s_id_emis_code": emis},
+        timeout=(10, DEFAULT_TIMEOUT),
+    )
+    response.raise_for_status()
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    returned_emis = normalize_emis(body.get("s_emis_code"))
+    if returned_emis and returned_emis != emis:
+        return None
+    updated = {
+        "district": str(body.get("s_district_idFk") or "").strip(),
+        "tehsil": str(body.get("s_tehsil_idFk") or "").strip(),
+        "markaz": str(body.get("s_markaz_idFk") or "").strip(),
+        "school": str(body.get("s_id") or "").strip(),
+    }
+    return updated if all(updated.values()) else None
+
+
 def fetch_one(
     session: requests.Session,
     csrf_token: str,
     school: dict[str, str],
     seed_emis: str,
-) -> tuple[dict[str, Any], str]:
-    """Fetch one school's male/female/other/total current enrollment."""
+) -> tuple[dict[str, Any], str, bool]:
+    """Fetch a school's counts and refresh stale DTMS IDs if the result is all zero."""
     last_error: Exception | None = None
-    for attempt in range(1, MAX_RETRIES + 1):
+    mapping_refreshed = False
+    dtms_checked = False
+    attempt = 0
+    max_attempts = MAX_RETRIES
+    while attempt < max_attempts:
+        attempt += 1
         # Prefer the token returned by the preceding SIS response. The cookie is
         # the initial source of truth and is refreshed below if a request fails.
         csrf_token = csrf_token or session.cookies.get("csrf_cookie_name")
@@ -218,7 +252,37 @@ def fetch_one(
                 if total_value is not None and str(total_value).strip() not in ("", "-", "--")
                 else male + female + other
             )
-            # Preserve the API total even if it differs from M+F+Other.
+            rotated = body.get("csrf_test_name") or session.cookies.get("csrf_cookie_name")
+            if not rotated:
+                raise RuntimeError("SIS response did not provide a renewed CSRF token")
+
+            # The saved school-to-Markaz mapping can be stale after SIS moves a
+            # school. A stale filter often returns a valid-looking all-zero JSON
+            # response, so refresh DTMS once and retry only if any ID changed.
+            if not dtms_checked and male == 0 and female == 0 and other == 0 and total == 0:
+                dtms_checked = True
+                try:
+                    fresh = refresh_dtms_mapping(session, school["emis"])
+                except Exception as exc:  # noqa: BLE001 - keep SIS zero if lookup is unavailable
+                    log(f"DTMS refresh failed for EMIS {school['emis']}: {exc}")
+                    fresh = None
+                if fresh:
+                    changed = {
+                        key: (school[key], fresh[key])
+                        for key in ("district", "tehsil", "markaz", "school")
+                        if str(school[key]) != str(fresh[key])
+                    }
+                    if changed:
+                        log(f"Refreshing stale DTMS IDs for EMIS {school['emis']}: {changed}")
+                        school.update(fresh)
+                        mapping_refreshed = True
+                        # Allow one extra POST for the corrected filter.
+                        if attempt == max_attempts:
+                            max_attempts += 1
+                        csrf_token = str(session.cookies.get("csrf_cookie_name") or rotated)
+                        continue
+                rotated = session.cookies.get("csrf_cookie_name") or rotated
+
             record = {
                 "emis": school["emis"],
                 "curM": male,
@@ -226,10 +290,7 @@ def fetch_one(
                 "curOther": other,
                 "curT": total,
             }
-            rotated = body.get("csrf_test_name") or session.cookies.get("csrf_cookie_name")
-            if not rotated:
-                raise RuntimeError("SIS response did not provide a renewed CSRF token")
-            return record, str(rotated)
+            return record, str(rotated), mapping_refreshed
         except (requests.RequestException, RuntimeError, ValueError) as exc:
             last_error = exc
             # The response may already have rotated the cookie, including on an
@@ -237,9 +298,9 @@ def fetch_one(
             refreshed = session.cookies.get("csrf_cookie_name")
             if refreshed and str(refreshed) != str(csrf_token):
                 csrf_token = str(refreshed)
-            elif attempt < MAX_RETRIES:
+            elif attempt < max_attempts:
                 csrf_token = find_csrf_token(session, seed_emis)
-            if attempt < MAX_RETRIES:
+            if attempt < max_attempts:
                 time.sleep(min(8, 2 ** (attempt - 1)))
 
     raise RuntimeError(str(last_error or "unknown SIS request error"))
@@ -270,21 +331,61 @@ def read_json(path: Path) -> dict[str, Any] | None:
         return None
 
 
+def patch_reference_for_mapping_updates(
+    path: Path,
+    current_payload: dict[str, Any],
+    updated_emis: set[str],
+) -> int:
+    """Reset invalid previous values for schools whose DTMS IDs changed mid-day."""
+    if not updated_emis:
+        return 0
+    previous = read_json(path)
+    if not previous or not isinstance(previous.get("schools"), list):
+        return 0
+    current_by_emis = {
+        str(row.get("emis")): row
+        for row in current_payload.get("schools", [])
+        if row.get("emis") is not None
+    }
+    patched = 0
+    for row in previous["schools"]:
+        if not isinstance(row, dict):
+            continue
+        emis = normalize_emis(row.get("emis"))
+        if emis not in updated_emis or emis not in current_by_emis:
+            continue
+        current = current_by_emis[emis]
+        for field in ("curM", "curF", "curOther", "curT"):
+            row[field] = current[field]
+        patched += 1
+    if patched:
+        previous["reference_adjusted_at_pkt"] = current_payload["fetched_at_pkt"]
+        previous["reference_adjusted_schools"] = patched
+        atomic_write_json(path, previous, compact=True)
+    return patched
+
+
 def scrape(
     schools: list[dict[str, str]],
     skipped: dict[str, int],
     workers: int,
     delay: float,
-) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, Any]]:
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, str]],
+    dict[str, Any],
+    dict[str, dict[str, str]],
+]:
     tasks: queue.Queue[dict[str, str]] = queue.Queue()
     for school in schools:
         tasks.put(school)
 
     successes: dict[str, dict[str, Any]] = {}
+    mapping_updates: dict[str, dict[str, str]] = {}
     failures: list[dict[str, str]] = []
     lock = threading.Lock()
     stop = threading.Event()
-    progress = {"processed": 0, "succeeded": 0, "failed": 0}
+    progress = {"processed": 0, "succeeded": 0, "failed": 0, "dtms_refreshed": 0}
 
     def worker(worker_number: int) -> None:
         seed_emis = schools[worker_number % len(schools)]["emis"]
@@ -305,9 +406,12 @@ def scrape(
                 except queue.Empty:
                     break
                 try:
-                    record, token = fetch_one(session, token, school, seed_emis)
+                    record, token, ids_refreshed = fetch_one(session, token, school, seed_emis)
                     with lock:
                         successes[school["emis"]] = record
+                        if ids_refreshed:
+                            mapping_updates[school["emis"]] = dict(school)
+                            progress["dtms_refreshed"] += 1
                     consecutive_failures = 0
                 except Exception as exc:  # noqa: BLE001 - report and continue on individual schools
                     with lock:
@@ -327,7 +431,8 @@ def scrape(
                         if processed % 1000 == 0:
                             log(
                                 f"Progress {processed:,}/{len(schools):,}: "
-                                f"{progress['succeeded']:,} ok, {progress['failed']:,} failed"
+                                f"{progress['succeeded']:,} ok, {progress['failed']:,} failed, "
+                                f"{progress['dtms_refreshed']:,} DTMS IDs refreshed"
                             )
                 if delay > 0:
                     time.sleep(delay)
@@ -356,7 +461,8 @@ def scrape(
         "unmapped": sum(skipped.values()),
         "skipped_statuses": skipped,
         "workers": worker_count,
-    }
+        "dtms_refreshed": len(mapping_updates),
+    }, mapping_updates
 
 
 def main() -> int:
@@ -383,7 +489,7 @@ def main() -> int:
             log("DRY RUN: mappings validated; no SIS requests and no files written.")
             return 0
 
-        records, failures, stats = scrape(schools, skipped, workers, delay)
+        records, failures, stats, mapping_updates = scrape(schools, skipped, workers, delay)
         allowed_failures = max(10, int(stats["mapped"] * max_failure_ratio))
         if stats["failed"] > allowed_failures:
             examples = "; ".join(
@@ -408,6 +514,7 @@ def main() -> int:
             "school_count": len(records),
             "failed": stats["failed"],
             "unmapped": stats["unmapped"],
+            "dtms_refreshed": stats["dtms_refreshed"],
             "schools": sorted(records, key=lambda item: item["emis"]),
         }
 
@@ -420,9 +527,16 @@ def main() -> int:
             or previous_meta.get("ref_date_pkt") != today_pkt
             or not PREV_PATH.exists()
         )
+        reference_adjusted = 0
         if is_reference:
             atomic_write_json(PREV_PATH, current_payload, compact=True)
             log(f"Pinned SIS reference snapshot to {PREV_PATH} for PKT date {today_pkt}")
+        elif mapping_updates:
+            reference_adjusted = patch_reference_for_mapping_updates(
+                PREV_PATH, current_payload, set(mapping_updates)
+            )
+            if reference_adjusted:
+                log(f"Adjusted today's SIS reference for {reference_adjusted} remapped schools")
 
         atomic_write_json(CURRENT_PATH, current_payload, compact=True)
         meta = {
@@ -435,6 +549,8 @@ def main() -> int:
             "requested": stats["mapped"],
             "failed": stats["failed"],
             "unmapped": stats["unmapped"],
+            "dtms_refreshed": stats["dtms_refreshed"],
+            "reference_adjusted": reference_adjusted,
             "skipped_statuses": stats["skipped_statuses"],
             "workers": stats["workers"],
             "bytes": CURRENT_PATH.stat().st_size,
@@ -443,7 +559,8 @@ def main() -> int:
         atomic_write_json(META_PATH, meta)
         log(
             f"SIS sync complete: {len(records):,}/{stats['mapped']:,} mapped schools saved; "
-            f"{stats['failed']:,} failed, {stats['unmapped']:,} unmapped; "
+            f"{stats['failed']:,} failed, {stats['unmapped']:,} unmapped, "
+            f"{stats['dtms_refreshed']:,} DTMS mappings refreshed; "
             f"{current_payload['fetched_at_pkt']}"
         )
         return 0
