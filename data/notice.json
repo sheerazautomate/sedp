@@ -1,8 +1,8 @@
 {
   "enabled": true,
-  "id": "2026-10-15",
-  "type": "critical",
-  "title": "GRADES Dashboard Access Revoked",
-  "message": "GRADES Official Dashboard (provided by PMIU) that was being used as data source for this dashboard has revoked public access. Dashboard will not be updated till I get access again. For more info +923347667999. Regards",
+  "id": "2026-10-15-sis-backup",
+  "type": "warning",
+  "title": "SIS Backup Data Active",
+  "message": "This dashboard can use SIS as a backup. In SIS mode, current enrollment comes from the latest SIS snapshot; baseline and target values remain from the latest Grades snapshot. Check the sync status above for the active source and last sync time.",
   "durationSeconds": 30
 }
