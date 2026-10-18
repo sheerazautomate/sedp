@@ -1,68 +1,93 @@
-# `data/` contract (worker-managed files)
+# `data/` contract
 
-The dashboard (`index.html` + `fetch-data.js`) reads these files with **no
-live login**. All files here except this README and `notice.json` are written
-by automation.
+The dashboard (`index.html` + `fetch-data.js`) reads these files directly. The
+Grades and SIS workflows update their own snapshots; `source.json` and
+`notice.json` are hand-edited configuration files.
 
 | File | Writer | Purpose |
 |---|---|---|
-| `enrollment.csv` | `fetch-enrollment.yml` (2-hourly) | Raw Grades `districts-enrollment` export. Latest (current) snapshot. |
-| `enrollment_prev.csv` | `fetch-enrollment.yml` (first run of each PKT day) | **Midnight reference** snapshot for the current PKT day. Pinned on the day's first successful run and left untouched by the rest of that day's syncs. Matched by EMIS for the day-change Δ. |
-| `meta.json` | `fetch-enrollment.yml` (each run) | `{fetched_at_utc, fetched_at_pkt, ref_date_pkt, sync_type, rows, bytes, source}` for the "last sync" label. `sync_type` is `reference` on the day's first run, `sync` afterwards. |
-| `emis_wing.json` | `wing-map-once.yml` (**once**) | Static `{EMIS: Wing}` lookup restoring the Wing dimension the Grades export lacks. |
-| `notice.json` | **Hand-edited by the dashboard owner** | Optional startup notice modal (see below). Never written by automation. |
+| `enrollment.csv` | `fetch-enrollment.yml` (2-hourly) | Latest Grades export. Supplies school dimensions and the baseline, target, and (when Grades is selected) current enrollment. |
+| `enrollment_prev.csv` | `fetch-enrollment.yml` (first successful run of each PKT day) | Grades reference snapshot for the day's Δ. |
+| `meta.json` | `fetch-enrollment.yml` | Grades sync timestamp, reference date, and source metadata. |
+| `sis_enrollment.json` | `fetch-sis-enrollment.yml` (2-hourly) | Latest SIS male/female/other/total current-enrollment counts keyed by EMIS. |
+| `sis_enrollment_prev.json` | `fetch-sis-enrollment.yml` (first successful run of each PKT day) | SIS reference snapshot for the day's Δ. |
+| `sis_meta.json` | `fetch-sis-enrollment.yml` | SIS sync timestamp, reference date, coverage, and source metadata. |
+| `school_ids.jsonl` | Maintained DTMS mapping | EMIS-to-SIS district/tehsil/markaz/school IDs used by the scraper. |
+| `emis_wing.json` | `wing-map-once.yml` (**once**) | Static `{EMIS: Wing}` lookup; restores the Wing dimension missing from the Grades export. |
+| `source.json` | **Hand-edited by the dashboard owner** | Chooses `grades` or `sis` as the current-enrollment source. |
+| `notice.json` | **Hand-edited by the dashboard owner** | Optional startup notice modal. |
 
-Do not hand-edit the worker-managed files — the next worker run overwrites
-them (except `emis_wing.json`, which is only rebuilt when the one-time
-workflow runs). `notice.json` is the exception: edit it by hand.
+## Selecting the active data source
+
+Edit `data/source.json`, then commit/publish the change:
+
+```json
+{
+  "source": "sis"
+}
+```
+
+Set `"source"` to `"sis"` or `"grades"`. A missing or invalid selector
+safely defaults to Grades. The dashboard's sync chip says **Synced from SIS**
+or **Synced from Grades** and shows that source's last sync time.
+
+- **Grades mode:** baseline, target, current enrollment, and the reference Δ all
+  come from the Grades files.
+- **SIS mode:** baseline, target, district/tehsil/markaz, school, and Wing remain
+  from the latest Grades export; current male/female/other/total enrollment
+  comes from the SIS snapshot. SIS Δ compares with the first successful SIS
+  scrape of the current PKT day.
+- If SIS is selected before the first snapshot exists, the dashboard temporarily
+  displays Grades data with a warning; it does not label that as an SIS sync.
+- Schools absent from the SIS snapshot retain their Grades current value so
+  provincial totals do not silently drop. The sync status and warning banner
+  disclose how many schools use this fallback.
+
+The SIS fetcher reads `school_ids.jsonl` and calls the public
+`/dashboard_revamp/get_gender_summary_pie` endpoint once per mapped school (about
+38,128 SIS requests per full run with the current file). It uses six concurrent
+workers with retries; if more than 0.5% of mapped schools fail, the workflow
+keeps the previous snapshot. No SIS credentials or browser-session cookies are
+stored. The workflow is scheduled every two hours and can also be run manually
+from **Actions → Fetch SIS enrollment**. A manual `dry_run` validates the
+mapping file without contacting SIS or writing data.
+
+The DTMS mapping currently has a few entries with `status: "missing"`; those
+cannot be queried by school ID and will use the Grades current value in SIS
+mode. Other temporary SIS request failures are retried. If too many requests
+fail, the workflow exits without replacing the last successful SIS snapshot.
 
 ## Startup notice (`notice.json`)
 
 Controls the blocking popup shown when the dashboard loads. With
-`"enabled": false` (the default) **nothing is shown at all**.
-
-To inform users about a problem (data delayed, dashboard issue,
-maintenance…), edit `data/notice.json`, commit and push:
+`"enabled": false`, nothing is shown. Example:
 
 ```json
 {
   "enabled": true,
-  "id": "2026-10-15-data-delay",
+  "id": "2026-10-15-sis-backup",
   "type": "warning",
-  "title": "Enrollment Data Delayed",
-  "message": "Today's enrollment figures may not be up to date. Please check back later.",
+  "title": "SIS Backup Data Active",
+  "message": "Current enrollment is from SIS; baseline and targets remain from the latest Grades snapshot.",
   "durationSeconds": 30
 }
 ```
 
-- `enabled` — `true` shows the modal, `false` hides it completely.
-- `id` — give **each new notice a new unique id**. The notice is shown only
-  once per browser session, and a changed `id` is what makes an updated
-  notice appear again for users who already saw the previous one.
-- `type` — `info` (blue), `warning` (amber) or `critical` (red).
+- `enabled` — `true` shows the modal, `false` hides it.
+- `id` — use a new unique ID for each notice so it appears again in a browser
+  session that saw an earlier notice.
+- `type` — `info`, `warning`, or `critical`.
 - `title` / `message` — plain text shown in the modal.
 - `durationSeconds` — auto-close time (default `30`).
 
-When shown, the modal blocks the dashboard behind it, displays a countdown
-bar ("Auto-closing in 30s"), and can be closed early with the Close / ×
-buttons or Escape; clicking outside it does not dismiss it. To stop showing
-it, set `"enabled": false` and push again.
+When enabled, the small light beside the sync chip stays red after the popup is
+dismissed, so the notice remains visible.
 
-While `"enabled": true`, the small light beside the masthead's
-`Last sync: … • N schools` chip also turns **red** instead of green. Unlike
-the modal it is not limited to once per session — it stays red on every
-visit until the notice is switched off, so users can still see the data is
-flagged as not updating after they dismiss the popup. Setting
-`"enabled": false` turns the light green again.
-
-## Secrets required
+## Grades workflow secrets
 
 `Settings -> Secrets and variables -> Actions`:
 
 - `GRADES_EMAIL`
 - `GRADES_PASSWORD`
 
-## Testing the login without committing
-
-`Actions -> Fetch Grades enrollment -> Run workflow` after adding secrets,
-or locally: `GRADES_EMAIL=.. GRADES_PASSWORD=.. python scripts/fetch_grades.py --dry-run`
+The SIS workflow is public-data-only and requires no login secrets.

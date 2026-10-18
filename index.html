@@ -83,6 +83,8 @@
       animation:syncBlink .38s linear infinite}
     .sync-chip.is-error{background:#fef2f2;border-color:#fecaca;color:#b91c1c;cursor:pointer}
     .sync-chip.is-error::before{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.22)}
+    .sync-chip.is-warning{background:#fffbeb;border-color:#fde68a;color:#92400e}
+    .sync-chip.is-warning::before{background:#d97706;box-shadow:0 0 0 3px rgba(217,119,6,.2)}
     .sync-chip.is-ok::before{animation:softPulse 1.6s ease-out 1}
     /* Notice active (data/notice.json has "enabled": true): the light beside the
        "Last sync" label turns red and stays red after the popup is dismissed, so
@@ -94,6 +96,7 @@
       color:#991b1b;border-radius:12px;padding:10px 14px;margin:0 0 14px;font-size:.8rem;font-weight:600}
     .error-banner .error-banner-msg{flex:1 1 auto;min-width:0}
     .error-banner .btn{flex:0 0 auto}
+    .error-banner.is-warning{background:#fffbeb;border-color:#fde68a;color:#92400e}
     @media (max-width:575.98px){
       .dash-head{padding:12px 14px}
       .dash-title{font-size:1.02rem}
@@ -863,10 +866,11 @@ let noticeAlert = false;
 function setSyncUI(state, text) {
   const chip = $("reportTimestamp");
   if (!chip) return;
-  chip.classList.remove("is-loading", "is-error", "is-ok");
+  chip.classList.remove("is-loading", "is-error", "is-warning", "is-ok");
   chip.onclick = null;
   if (state === "loading") chip.classList.add("is-loading");
   else if (state === "error") { chip.classList.add("is-error"); chip.onclick = retryLoad; }
+  else if (state === "warning") chip.classList.add("is-warning");
   else if (state === "ok") chip.classList.add("is-ok");
   chip.classList.toggle("is-notice", noticeAlert);
   if (text != null) chip.innerText = text;
@@ -876,12 +880,19 @@ function setSyncNoticeAlert(on) {
   const chip = $("reportTimestamp");
   if (chip) chip.classList.toggle("is-notice", noticeAlert);
 }
-function showErrorBanner(msg) {
-  const b = $("errorBanner"), t = $("errorBannerMsg");
+function showErrorBanner(msg, warning) {
+  const b = $("errorBanner"), t = $("errorBannerMsg"), btn = b && b.querySelector("button");
   if (t) t.innerText = msg || "Could not load enrollment data.";
-  if (b) b.style.display = "flex";
+  if (b) {
+    b.classList.toggle("is-warning", !!warning);
+    b.style.display = "flex";
+  }
+  if (btn) btn.className = warning ? "btn btn-sm btn-warning" : "btn btn-sm btn-danger";
 }
-function hideErrorBanner() { const b = $("errorBanner"); if (b) b.style.display = "none"; }
+function hideErrorBanner() {
+  const b = $("errorBanner");
+  if (b) { b.style.display = "none"; b.classList.remove("is-warning"); }
+}
 
 /* ------- Startup notice (controlled by data/notice.json) -------
    Hidden by default: nothing is shown unless that file has "enabled": true
@@ -1103,17 +1114,47 @@ function rollKPIValues() {
 
 async function loadInitialData() {
   hideErrorBanner();
-  setSyncUI("loading", "Syncing enrollment data\u2026");
+  setSyncUI("loading", "Checking selected enrollment source\u2026");
   startSpin();
+  let selectedSource = "grades";
+  let fallbackWarning = "";
   try {
-    const { rows, meta, report } = await GradesLoader.loadGradesData();
+    selectedSource = await GradesLoader.loadDataSource();
+    const loadingName = selectedSource === "sis" ? "SIS" : "Grades";
+    setSyncUI("loading", `Syncing ${loadingName} enrollment data\u2026`);
+    let result;
+    try {
+      result = selectedSource === "sis"
+        ? await GradesLoader.loadSisData()
+        : await GradesLoader.loadGradesData();
+    } catch (sourceError) {
+      /* Keep the dashboard usable before the first SIS Action run, but never
+         present the Grades fallback as if it were an SIS sync. */
+      if (selectedSource !== "sis") throw sourceError;
+      console.warn("[sis] selected SIS snapshot unavailable; loading Grades fallback:", sourceError);
+      result = await GradesLoader.loadGradesData();
+      result.report.source = "grades";
+      fallbackWarning = "SIS is selected, but its snapshot is not available yet. Showing the last Grades data until a SIS sync completes. " +
+        ((sourceError && sourceError.message) ? sourceError.message : "");
+    }
+    const { rows, meta, report } = result;
     MASTER_DATA = rows; META = meta;
     DELTA = report.delta || { state: "ok", reason: "", refDate: null };
     setupDropdowns();
     updateViewByDropdown();
+    const actualSource = report.source || selectedSource;
+    const sourceName = actualSource === "sis" ? "SIS" : "Grades";
     const when = meta && meta.fetched_at_pkt ? meta.fetched_at_pkt : new Date().toLocaleString("en-PK");
+    const missingSis = actualSource === "sis" ? (Number(report.missingSis) || 0) : 0;
+    const coverageText = missingSis ? ` \u2022 ${missingSis.toLocaleString()} Grades fallback` : "";
     stopSpin();
-    setSyncUI("ok", `Last sync: ${when} \u2022 ${report.rows.toLocaleString()} schools`);
+    setSyncUI(fallbackWarning || missingSis ? "warning" : "ok",
+      `${fallbackWarning ? "Showing Grades fallback (SIS selected)" : `Synced from ${sourceName}`} \u2022 ${when} \u2022 ${report.rows.toLocaleString()} schools${coverageText}`);
+    if (fallbackWarning) showErrorBanner(fallbackWarning, true);
+    else if (missingSis) showErrorBanner(
+      `${missingSis.toLocaleString()} schools have no SIS current-enrollment row; their Grades current values are shown instead.`,
+      true
+    );
     loadData();
   } catch (e) {
     console.error(e);
