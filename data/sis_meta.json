@@ -1,6 +1,6 @@
 {
-  "fetched_at_utc": "2026-10-20T02:23:37Z",
-  "fetched_at_pkt": "2026-10-20 07:23 AM PKT",
+  "fetched_at_utc": "2026-10-20T06:32:49Z",
+  "fetched_at_pkt": "2026-10-20 11:32 AM PKT",
   "ref_date_pkt": "2026-10-20",
   "sync_type": "sync",
   "source": "sis.pesrp.edu.pk dashboard_revamp/get_gender_summary_pie",
@@ -14,6 +14,6 @@
     "missing": 6
   },
   "workers": 6,
-  "bytes": 2455726,
+  "bytes": 2455713,
   "failure_examples": []
 }
