@@ -359,3 +359,30 @@ h1 {
   .slide:last-child { break-after: auto; page-break-after: auto; }
   #nav, #progress { display: none !important; }
 }
+
+/* ------------------------------------------------------- hierarchy (levels) */
+.hier { display: flex; align-items: stretch; gap: 6px; }
+.hier-step {
+  flex: 1; background: #f8fafc; border: 1px solid var(--line); border-radius: 5px;
+  padding: 7px 9px; min-width: 0;
+}
+.hier-step span { display: block; font-size: 7.8px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.hier-step b { display: block; font-size: 11px; color: var(--navy); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hier-step i { display: block; font-style: normal; font-size: 8.5px; color: var(--muted); margin-top: 1px; }
+.hier-arrow { align-self: center; color: #cbd5e1; font-size: 13px; font-weight: 700; flex: none; }
+
+.wc-foot {
+  margin-top: 9px; padding-top: 7px; border-top: 1px dashed var(--line);
+  font-size: 8.6px; letter-spacing: .03em; color: var(--muted); font-weight: 600;
+}
+
+/* ------------------------------------------- secondary wing "one block" strip */
+.blockstrip {
+  display: grid; grid-template-columns: 130px 96px 1fr auto; align-items: center; gap: 14px;
+  border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 5px;
+  background: #f6fbfa; padding: 10px 14px;
+}
+.bs-name { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--teal); }
+.bs-ach { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+.bs-meta { font-size: 10.5px; color: var(--slate); }
+.bs-note { font-size: 9px; color: var(--muted); text-align: right; max-width: 170px; }

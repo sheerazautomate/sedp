@@ -199,16 +199,11 @@ def build():
     n = district["n"]
     total_inc = district["tT"] - district["bT"]
 
-    tehsils = []
-    for t in TEHSIL_ORDER:
-        g = [s for s in schools if s["tehsil"] == t]
-        a = agg(g)
-        a["name"] = t
-        for key in ("share_gap", "share_enr", "share_schools"):
-            a[key] = 100.0 * a[{"share_gap": "gap", "share_enr": "cT", "share_schools": "n"}[key]] / district[
-                {"share_gap": "gap", "share_enr": "cT", "share_schools": "n"}[key]]
-        tehsils.append(a)
-
+    # ---------------------------------------------------------------- hierarchy
+    # District -> Wing -> Tehsil -> Markaz -> School.
+    # Only the two elementary wings (M-EE, W-EE) are organised by tehsil and
+    # markaz. The secondary wing is a single district-wide block of high
+    # schools and is never split tehsil-wise.
     wings = []
     for w in ("M-EE", "W-EE", "SE"):
         a = agg([s for s in schools if s["wing"] == w])
@@ -218,8 +213,47 @@ def build():
         a["share_enr"] = 100.0 * a["cT"] / district["cT"]
         a["share_schools"] = 100.0 * a["n"] / district["n"]
         wings.append(a)
+
     elem = agg([s for s in schools if s["wing"] in ("M-EE", "W-EE")])
     elem["share_gap"] = 100.0 * elem["gap"] / district["gap"]
+    elem["share_enr"] = 100.0 * elem["cT"] / district["cT"]
+    sec = wings[2]
+    sec_schools = [s for s in schools if s["wing"] == "SE"]
+    sec["girls_schools"] = sum(1 for s in sec_schools if s["name"].upper().startswith("GG"))
+    sec["boys_schools"] = sec["n"] - sec["girls_schools"]
+    sec_by_gap = sorted(sec_schools, key=lambda s: -s["gap"])
+    sec_bands = []
+    for lo, hi, lab in [(0, 200, "under 200"), (200, 400, "200–400"),
+                        (400, 800, "400–800"), (800, 10 ** 9, "800+")]:
+        g = [s for s in sec_schools if lo <= s["cT"] < hi]
+        if not g:
+            continue
+        a = agg(g)
+        a["label"] = lab
+        a["share_gap"] = 100.0 * a["gap"] / sec["gap"]
+        a["share_enr"] = 100.0 * a["cT"] / sec["cT"]
+        sec_bands.append(a)
+
+    tehsils = []
+    for t in TEHSIL_ORDER:
+        g = [s for s in schools if s["tehsil"] == t and s["wing"] in ("M-EE", "W-EE")]
+        a = agg(g)
+        a["name"] = t
+        a["share_enr"] = 100.0 * a["cT"] / elem["cT"]
+        a["share_schools"] = 100.0 * a["n"] / elem["n"]
+        a["share_gap"] = 100.0 * a["gap"] / elem["gap"]
+        a["share_district_gap"] = 100.0 * a["gap"] / district["gap"]
+        tehsils.append(a)
+
+    tw = {(t["name"], w): agg([s for s in schools if s["tehsil"] == t["name"] and s["wing"] == w])
+          for t in tehsils for w in ("M-EE", "W-EE")}
+    chaubara_we = tw[("Chaubara", "W-EE")]
+    wing_markaz = {w: len({(s["tehsil"], s["markaz"]) for s in schools
+                           if s["wing"] == w and "SECONDARY" not in s["markaz"].upper()})
+                   for w in ("M-EE", "W-EE")}
+    tehsil_markaz = {t: {w: len({(s["tehsil"], s["markaz"]) for s in schools
+                                 if s["tehsil"] == t and s["wing"] == w})
+                         for w in ("M-EE", "W-EE")} for t in TEHSIL_ORDER}
 
     # markaz (the three "SECONDARY-WING" buckets are a wing, not an AEO markaz)
     markaz_all = []
@@ -228,7 +262,8 @@ def build():
         a["tehsil"] = teh
         a["name"] = name
         a["secondary"] = "SECONDARY" in name.upper()
-        a["share_gap"] = 100.0 * a["gap"] / district["gap"]
+        a["share_gap"] = 100.0 * a["gap"] / (elem["gap"] or 1)
+        a["share_district_gap"] = 100.0 * a["gap"] / district["gap"]
         markaz_all.append(a)
     markaz = [m for m in markaz_all if not m["secondary"]]
     markaz_sorted = sorted(markaz, key=lambda m: -m["achT"])
@@ -276,6 +311,9 @@ def build():
         "up": len(gainers), "down": len(losers), "flat": n - len(gainers) - len(losers),
         "best": sorted(schools, key=lambda s: -s["delta"])[:5],
         "worst": sorted(schools, key=lambda s: s["delta"])[:5],
+        "by_tehsil": {t: sum(x["delta"] for x in schools
+                             if x["tehsil"] == t and x["wing"] in ("M-EE", "W-EE")) for t in TEHSIL_ORDER},
+        "by_sec": sum(x["delta"] for x in schools if x["wing"] == "SE"),
     }
 
     tiny = sum(1 for s in schools if 0 < s["inc"] <= 10)
@@ -418,11 +456,11 @@ def build():
         (f"{district['achM'] - district['achF']:.1f} pp", "gap between boys' and girls' achievement",
          f"Boys are at <b>{pct(district['achM'])}</b>, girls at <b>{pct(district['achF'])}</b>. Girls account for "
          f"<b>{fmt(district['needF'])}</b> of the remaining need — {district['needF'] / district['gap'] * 100:.0f}% of the district total.", "pink"),
-        (f"{wings[2]['share_gap']:.0f}%", "of the gap sits in 200 secondary schools",
-         f"The secondary wing holds <b>{fmt(wings[2]['gap'])}</b> of the {fmt(district['gap'])} shortfall at "
-         f"<b>{pct(wings[2]['achT'])}</b> achievement, against {pct(elem['achT'])} for the two elementary wings.", "amber"),
-        (f"{top20_gap / district['gap'] * 100:.0f}%", "of the gap sits in 20 schools",
-         f"Twenty mostly-urban secondary schools hold <b>{fmt(top20_gap)}</b> students of the shortfall. "
+        (f"{sec['share_gap']:.0f}%", "of the gap sits in the secondary block",
+         f"All {sec['n']} high schools reported together hold <b>{fmt(sec['gap'])}</b> of the {fmt(district['gap'])} shortfall at "
+         f"<b>{pct(sec['achT'])}</b> achievement, against {pct(elem['achT'])} across the two elementary wings.", "amber"),
+        (f"{top20_gap / district['gap'] * 100:.0f}%", "of the gap sits in 20 high schools",
+         f"Twenty mostly-urban high schools hold <b>{fmt(top20_gap)}</b> students of the shortfall. "
          f"Closing them alone lifts the district from {pct(district['achT'])} to <b>{pct(top20_new_ach)}</b>.", "green"),
     ]
     cards = "".join(f'<div class="finding tone-{tone}"><div class="f-num">{v}</div><div class="f-lab">{lab}</div>'
@@ -434,10 +472,10 @@ def build():
         <div class="findings">{cards}</div>
         <div class="split2 mt16">
           {callout("The one-line diagnosis",
-            f"Growth is healthy in small and mid-sized elementary schools — and has stalled exactly where the students are. "
-            f"The {big['n']} schools with 800+ students are <b>{abs(big['achT']):.1f}% below their own baseline</b> and hold "
-            f"{big['share_gap']:.0f}% of the district gap, while Karor Lalisan's elementary wing is already at "
-            f"<b>101%</b>. Layyah does not have an enrollment problem everywhere; it has one in large secondary schools.", "navy")}
+            f"Growth is healthy in elementary schools — and has stalled exactly where the students are. The secondary block is "
+            f"<b>{sec['share_gap']:.0f}% of the district gap</b> on {sec['share_enr']:.0f}% of enrollment, and the {big['n']} schools with 800+ "
+            f"students are <b>{abs(big['achT']):.1f}% below their own baseline</b>. Meanwhile the elementary wings are at "
+            f"{pct(elem['achT'])} and Karor Lalisan's elementary tehsil is already at target.", "navy")}
           <div class="factbox">
             <div class="fb-row"><span>Schools below baseline</span><b>{district['below_base']} <i>({district['below_base'] / n * 100:.1f}%)</i></b></div>
             <div class="fb-row"><span>Schools below target</span><b>{district['below_target']} <i>({district['below_target'] / n * 100:.1f}%)</i></b></div>
@@ -467,22 +505,32 @@ def build():
           <div>
             {table(["Measure", "Source / rule", "Snapshot", "Notes"], method_rows,
                    cls="compact", widths=["126px", "256px", "150px", "404px"], aligns=["left"] * 4)}
-            <div class="grid4 mt16">
-              {kpi("Schools in scope", fmt(n), "all Layyah schools on the SIS roster", "blue")}
-              {kpi("Tehsils", "3", "Layyah · Karor Lalisan · Chaubara", "slate")}
-              {kpi("Markaz", str(len(markaz)), "AEO clusters (excludes 3 wing buckets)", "slate")}
-              {kpi("Wings", "3", "M-EE · W-EE · SE", "slate")}
+            <div class="hier mt14">
+              <div class="hier-step"><span>District</span><b>Layyah</b><i>{fmt(n)} schools</i></div>
+              <div class="hier-arrow">→</div>
+              <div class="hier-step"><span>Level 1 · Wing</span><b>M-EE · W-EE · SE</b><i>{wings[0]['n']} · {wings[1]['n']} · {sec['n']}</i></div>
+              <div class="hier-arrow">→</div>
+              <div class="hier-step"><span>Level 2 · Tehsil</span><b>3 tehsils</b><i>M-EE and W-EE only</i></div>
+              <div class="hier-arrow">→</div>
+              <div class="hier-step"><span>Level 3 · Markaz</span><b>{len(markaz)}</b><i>{wing_markaz['M-EE']} M-EE · {wing_markaz['W-EE']} W-EE</i></div>
+              <div class="hier-arrow">→</div>
+              <div class="hier-step"><span>Level 4 · School</span><b>{fmt(n)}</b><i>reported individually</i></div>
             </div>
+            <div class="note mt8">The secondary wing stops at level 1: its {sec['n']} high schools are reported as one district block,
+            with no tehsil or markaz layer — which is how this deck reports them.</div>
           </div>
           <div class="side">
+            {callout("Wing first, then tehsil",
+              f"Because the wing sits above the tehsil, every result in this deck is built the same way: district → wing → "
+              f"(tehsil → markaz for M-EE and W-EE) → school. The secondary block is never averaged into a tehsil figure.", "blue")}
             {callout("Read percentages with care",
               f"<b>{tiny}</b> schools have a target only 1–10 students above baseline, so a single student can move their "
-              f"percentage by 10–100 points. That is why school-level figures here run from −800% to +3,000%. "
-              f"Judge strategy on district, tehsil and wing totals; treat an individual percentage as a screening flag only.", "amber")}
+              f"percentage by 10–100 points; school-level figures therefore run from −800% to +3,000%. Judge strategy on wing, "
+              f"tehsil and block totals and treat an individual percentage as a screening flag only.", "amber")}
             {callout("Totals",
-              f"“Total” includes the <b>{district['cO']}</b> students recorded under “Other”, so boys + girls can differ from the "
-              f"total by that amount. The three “Secondary Wing” rows that appear as markaz in the source are wing "
-              f"aggregates, not AEO clusters, and are excluded from the markaz league.", "slate")}
+              f"“Total” includes the <b>{district['cO']}</b> students recorded under “Other”, so boys + girls can differ from the total "
+              f"by that amount. The three “Secondary Wing” rows that appear as markaz in the source are wing aggregates, not AEO "
+              f"clusters; they are excluded from the markaz league and replaced by the single secondary block.", "slate")}
           </div>
         </div>""")
 
@@ -557,7 +605,8 @@ def build():
                  <div class="gval">{fmt(v)}</div></div>''' for lab, v, col, mx in gcols)}
             </div>
             <div class="note">Girls started <b>{fmt(district['bF'] - district['bM'])}</b> ahead of boys at baseline and are now
-            <b>{fmt(district['cM'] - district['cF'])}</b> behind. The target asks girls to add {fmt(district['tF'] - district['bF'])} students; they have added {fmt(district['cF'] - district['bF'])}.</div>
+            <b>{fmt(district['cM'] - district['cF'])}</b> behind. The target asks girls to add {fmt(district['tF'] - district['bF'])} students; they have added {fmt(district['cF'] - district['bF'])}.
+            The damage is concentrated in the secondary block (girls {pct(sec['achF'])}, boys {pct(sec['achM'])}) and in Chaubara's female elementary wing ({pct(chaubara_we['achT'])}).</div>
           </div>
           <div class="side">
             {stat("Boys achievement", pct(district['achM']), "blue")}
@@ -573,67 +622,10 @@ def build():
           f"{pct(district['achT'])} — a <b>{lift:.1f} point</b> difference with no change in boys' performance at all. "
           f"Every point of girls' enrollment is worth more to the district total than an additional point of boys'.", "pink")}""")
 
-    # 7 tehsil scorecard ----------------------------------------------------
-    rows = [[f"<b>{t['name']}</b>", fmt(t['n']), str(t['markaz']), fmt(t['cT']), chip(t['achT']),
-             str(t['below_base']), fmt(t['gap']), f"{t['share_gap']:.0f}%"] for t in tehsils]
-    rows.append([f"<b>District</b>", f"<b>{fmt(n)}</b>", f"<b>{len(markaz)}</b>", f"<b>{fmt(district['cT'])}</b>",
-                 chip(district['achT']), f"<b>{district['below_base']}</b>", f"<b>{fmt(district['gap'])}</b>", "<b>100%</b>"])
-    add("Tehsil view", "Layyah tehsil holds the students and the shortfall; Karor Lalisan holds the momentum",
-        "The three tehsils behave like three different systems — 51% of enrollment and 64% of the gap sit in Layyah tehsil alone.",
-        f"""
-        <div class="split-wide">
-          <div>
-            {table(["Tehsil", "Schools", "Markaz", "Current", "Achievement", "Below baseline", "Gap", "Share of gap"],
-                   rows, widths=["112px", "66px", "60px", "84px", "94px", "100px", "78px", "84px"])}
-            <div class="mt18 sec-h">Achievement against target</div>
-            {bars([(t['name'], max(t['achT'], 0), ["#2563eb", "#198754", "#db2777"][i], pct(t['achT'])) for i, t in enumerate(tehsils)],
-                  max_value=60, label_w=112, height=20)}
-            <div class="note">Karor Lalisan achieves {tehsils[1]['achT'] / max(tehsils[0]['achT'], 1):.1f}× Layyah tehsil's rate with 170 fewer schools — size is not what is holding Layyah back.</div>
-          </div>
-          <div class="side">
-            {callout("Layyah", f"{fmt(tehsils[0]['cT'])} students ({tehsils[0]['share_enr']:.0f}% of the district) and "
-              f"{tehsils[0]['share_gap']:.0f}% of the gap. Achievement {pct(tehsils[0]['achT'])}; {tehsils[0]['below_base']} of its "
-              f"{tehsils[0]['n']} schools are below baseline; none of its {tehsils[0]['markaz']} markaz is at target.", "blue")}
-            {callout("Karor Lalisan", f"The strongest tehsil at {pct(tehsils[1]['achT'])}. Its elementary wings are at or near target "
-              f"(M-EE 101.0%, W-EE 97.5%) and 18 of its markaz are at 100%+. But its secondary wing sits at 12.3%, which is why "
-              f"the tehsil still needs {fmt(tehsils[1]['gap'])} more students.", "green")}
-            {callout("Chaubara", f"Smallest at {fmt(tehsils[2]['cT'])} students ({tehsils[2]['share_enr']:.0f}%), with the weakest gender "
-              f"profile: parity index {tehsils[2]['gpi']:.2f}, only {tehsils[2]['female_share']:.0f}% girls and {tehsils[2]['zero_girls']} schools "
-              f"with no girls enrolled at all.", "pink")}
-          </div>
-        </div>""")
-
-    # 8 tehsil x wing -------------------------------------------------------
-    heat_rows = []
-    for t in tehsils:
-        cells = ""
-        for w in ("M-EE", "W-EE", "SE"):
-            g = [s for s in schools if s["tehsil"] == t["name"] and s["wing"] == w]
-            a = agg(g)
-            cells += (f'<td class="heat" style="background:{ach_color(a["achT"])}12">'
-                      f'<div class="h-ach" style="color:{ach_color(a["achT"])}">{pct(a["achT"])}</div>'
-                      f'<div class="h-gap">{a["n"]} schools · ' + ('surplus ' + fmt(-a["gap"]) if a["gap"] < 0 else 'needs ' + fmt(a["gap"])) + '</div></td>')
-        heat_rows.append(f'<tr><th>{t["name"]}<span>{t["n"]} schools · needs {fmt(t["gap"])}</span></th>{cells}</tr>')
-    wing_head = "".join(f"<th>{WING_SHORT[w]}<span>{WING_LABEL[w]}</span></th>" for w in ("M-EE", "W-EE", "SE"))
-    layyah_se = agg([s for s in schools if s["tehsil"] == "Layyah" and s["wing"] == "SE"])
-    karor_se = agg([s for s in schools if s["tehsil"] == "Karor Lalisan" and s["wing"] == "SE"])
-    chaubara_we = agg([s for s in schools if s["tehsil"] == "Chaubara" and s["wing"] == "W-EE"])
-    chaubara_se = agg([s for s in schools if s["tehsil"] == "Chaubara" and s["wing"] == "SE"])
-    add("Tehsil × wing", "The gap is not spread evenly — it is concentrated in secondary schools in Layyah and Chaubara",
-        "Read across a row to see where a tehsil is winning, and down a column to see which wing is failing the district.",
-        f"""
-        <table class="tbl heat-tbl"><thead><tr><th></th>{wing_head}</tr></thead><tbody>{''.join(heat_rows)}</tbody></table>
-        <div class="grid3 mt16">
-          {kpi("Karor Lalisan · elementary", "~100%", f"M-EE 101.0% · W-EE 97.5% on {fmt(tehsils[1]['cT'])} students; the whole tehsil needs only {fmt(tehsils[1]['gap'])}", "green")}
-          {kpi("Layyah · secondary", pct(layyah_se['achT']), f"{layyah_se['n']} schools, {fmt(layyah_se['cT'])} students, needs {fmt(layyah_se['gap'])} — 39% of the district gap", "red")}
-          {kpi("Chaubara · secondary", pct(chaubara_se['achT']), f"{chaubara_se['n']} schools already below baseline — the only wing/tehsil cell in negative territory", "darkred")}
-        </div>
-        <div class="note">Every secondary cell is weak ({pct(layyah_se['achT'])} in Layyah, {pct(karor_se['achT'])} in Karor Lalisan, {pct(chaubara_se['achT'])} in Chaubara) while every elementary cell except
-        Chaubara's girls' wing is above 37%. Chaubara's female elementary wing is at {pct(chaubara_we['achT'])} on {fmt(chaubara_we['cT'])} students — the sharpest single weakness in the district.</div>""")
-
-    # 9 wing view -----------------------------------------------------------
-    add("Wing view", "Elementary schools are delivering; secondary schools are the bottleneck",
-        f"{wings[2]['n']} secondary schools teach {wings[2]['share_enr']:.0f}% of Layyah's students — and hold {wings[2]['share_gap']:.0f}% of the students still missing.",
+    # 7 · LEVEL 1 — wings ----------------------------------------------------
+    add("Level 1 · Wings", "Layyah has three wings — and they are not three copies of each other",
+        f"Every school belongs to M-EE, W-EE or SE. The two elementary wings run District → Tehsil → Markaz → "
+        f"School; the secondary wing is one district-wide block of high schools.",
         f"""
         <div class="grid3">
           {''.join(f'''<div class="wingcard tone-{['blue', 'pink', 'amber'][i]}">
@@ -648,24 +640,132 @@ def build():
               <div><span>Still needed</span><b class="neg">{fmt(w['gap'])}</b></div>
               <div><span>Girls</span><b>{fmt(w['cF'])} ({w['female_share']:.0f}%)</b></div>
               <div><span>Below baseline</span><b>{w['below_base']} schools</b></div>
-            </div></div>''' for i, w in enumerate(wings))}
+            </div>
+            <div class="wc-foot">{'3 tehsils · ' + str(wing_markaz['M-EE']) + ' markaz' if w['code'] == 'M-EE'
+                                 else ('3 tehsils · ' + str(wing_markaz['W-EE']) + ' markaz' if w['code'] == 'W-EE'
+                                       else 'one district block · no tehsil or markaz layer')}</div>
+            </div>''' for i, w in enumerate(wings))}
         </div>
         <div class="split2 mt18">
           <div>
             <div class="sec-h">Share of the district's remaining need</div>
             {bars([(w['name'], w['share_gap'], WING_COLOR[w['code']], f"{w['share_gap']:.0f}%") for w in wings],
                   max_value=70, label_w=160, height=20)}
-            <div class="note">Elementary wings need only {fmt(elem['gap'])} more students between them — {elem['share_gap']:.0f}% of the gap — a {elem['gap'] / elem['cT'] * 100:.1f}% lift.</div>
+            <div class="note">Elementary wings need {fmt(elem['gap'])} more students between them — {elem['share_gap']:.0f}% of the gap, a
+            {elem['gap'] / elem['cT'] * 100:.1f}% lift on {fmt(elem['cT'])} students. The secondary block needs {fmt(sec['gap'])}, a
+            {sec['gap'] / sec['cT'] * 100:.1f}% lift on {fmt(sec['cT'])}.</div>
           </div>
-          {callout("The arithmetic of the shortfall",
-            f"Secondary needs <b>{fmt(wings[2]['gap'])}</b>, a {wings[2]['gap'] / wings[2]['cT'] * 100:.1f}% lift, and is currently running "
-            f"<b>{fmt(abs(wings[2]['growth']))} students below baseline</b>. No amount of primary-school effort closes this gap: it has to be won "
-            f"in grades 6–12, in the {wings[2]['n']} schools that teach them.", "navy")}
+          {callout("Why the wing comes before the tehsil",
+            f"M-EE and W-EE are field structures: each is divided into the three tehsils and then into AEO markaz, so their results "
+            f"are read tehsil by tehsil. Secondary is a <b>single block of {sec['n']} high schools</b> — it has no tehsil or markaz "
+            f"layer in the reporting hierarchy, so it is presented here once, as a district block, and never split tehsil-wise.", "navy")}
+        </div>""")
+
+    # 8 · LEVEL 1 — secondary block -----------------------------------------
+    sec_rows = [[f"<b>{b['label']}</b>", fmt(b['n']), fmt(b['cT']), chip(b['achT']), fmt(b['gap']),
+                 f"{b['share_gap']:.1f}%"] for b in sec_bands]
+    sec_top_rows = [[s['name'], fmt(s['cT']), fmt(s['gap']), chip(s['achT'])] for s in sec_by_gap[:8]]
+    add("Level 1 · Secondary block", f"The secondary wing is one block of {sec['n']} high schools — and it holds {sec['share_gap']:.0f}% of the gap",
+        f"Reported together as a district block, exactly as it is administered: no tehsil split, no markaz split.",
+        f"""
+        <div class="grid4">
+          {kpi("High schools", fmt(sec['n']), f"{sec['girls_schools']} girls' · {sec['boys_schools']} boys'", "amber")}
+          {kpi("Current enrollment", fmt(sec['cT']), f"Boys {fmt(sec['cM'])} · Girls {fmt(sec['cF'])}", "blue", True)}
+          {kpi("Achievement", pct(sec['achT']), f"median school {pct(sec['median_ach'])}", "red", True)}
+          {kpi("Still needed", fmt(sec['gap']), f"{sec['share_gap']:.0f}% of the district gap", "darkred")}
+        </div>
+        <div class="split-wide mt14">
+          <div>
+            <div class="sec-h">High schools by size</div>
+            {table(["Size band", "Schools", "Students", "Achievement", "Gap", "Share of block gap"],
+                   sec_rows, cls="compact", widths=["110px", "70px", "86px", "106px", "72px", "132px"])}
+            <div class="sec-h mt12">Largest shortfalls inside the block</div>
+            {table(["High school", "Current", "Gap", "Ach."], sec_top_rows, cls="compact",
+                   widths=["250px", "76px", "66px", "70px"])}
+          </div>
+          <div class="side">
+            {stat("Boys achievement", pct(sec['achM']), "blue")}
+            {stat("Girls achievement", pct(sec['achF']), "darkred")}
+            {stat("Girls still needed", fmt(sec['needF']), "pink")}
+            {stat("Below baseline", f"{sec['below_base']} schools", "red")}
+            {callout("Read this block as a whole",
+              f"Baseline {fmt(sec['bT'])} → current {fmt(sec['cT'])} → target {fmt(sec['tT'])}: the block has added only "
+              f"<b>{signed(sec['growth'])}</b> of the {fmt(sec['tT'] - sec['bT'])} it needs. The {sec_bands[-1]['n']} schools with "
+              f"800+ students are {sec_bands[-1]['share_enr']:.0f}% of the block's enrollment and hold {sec_bands[-1]['share_gap']:.0f}% of its gap.",
+              "amber")}
+          </div>
+        </div>""")
+
+    # 9 · LEVEL 2 — tehsils (elementary only) --------------------------------
+    rows = [[f"<b>{t['name']}</b>", fmt(t['n']), str(t['markaz']), fmt(t['cT']), chip(t['achT']),
+             str(t['below_base']), fmt(t['gap']), f"{t['share_gap']:.0f}%"] for t in tehsils]
+    rows.append([f"<b>Elementary wings</b>", f"<b>{fmt(elem['n'])}</b>", f"<b>{len(markaz)}</b>", f"<b>{fmt(elem['cT'])}</b>",
+                 chip(elem['achT']), f"<b>{elem['below_base']}</b>", f"<b>{fmt(elem['gap'])}</b>", "<b>100%</b>"])
+    rows.append([f"<b>Secondary block</b>", f"<b>{fmt(sec['n'])}</b>", "<b>—</b>", f"<b>{fmt(sec['cT'])}</b>",
+                 chip(sec['achT']), f"<b>{sec['below_base']}</b>", f"<b>{fmt(sec['gap'])}</b>",
+                 f"<b>{sec['gap'] / district['gap'] * 100:.0f}% of district</b>"])
+    add("Level 2 · Tehsils", "Within the elementary wings: Karor Lalisan is at target, Layyah carries the elementary shortfall",
+        f"M-EE and W-EE only — {fmt(elem['n'])} schools, {fmt(elem['cT'])} students and {len(markaz)} markaz. "
+        f"The secondary block is added below for reconciliation, not compared tehsil-wise.",
+        f"""
+        <div class="split-wide">
+          <div>
+            {table(["Tehsil (elementary)", "Schools", "Markaz", "Current", "Achievement", "Below baseline", "Gap", "Share of elementary gap"],
+                   rows, widths=["128px", "62px", "58px", "80px", "92px", "92px", "70px", "118px"])}
+            <div class="mt18 sec-h">Achievement against target — elementary wings by tehsil</div>
+            {bars([(t['name'], max(t['achT'], 0), ["#2563eb", "#198754", "#db2777"][i], pct(t['achT'])) for i, t in enumerate(tehsils)],
+                  max_value=110, label_w=112, height=20)}
+            <div class="note">Karor Lalisan ({fmt(tehsils[1]['cT'])} elementary students) is effectively at target on both wings.
+            Layyah tehsil ({fmt(tehsils[0]['cT'])}) needs {fmt(tehsils[0]['gap'])} — {tehsils[0]['share_gap']:.0f}% of the elementary gap.
+            Chaubara ({fmt(tehsils[2]['cT'])}) needs {fmt(tehsils[2]['gap'])}.</div>
+          </div>
+          <div class="side">
+            {callout("Layyah", f"{fmt(tehsils[0]['gap'])} of the {fmt(elem['gap'])} elementary shortfall, spread over "
+              f"{tehsils[0]['n']} schools in {tehsils[0]['markaz']} markaz. Achievement {pct(tehsils[0]['achT'])}; "
+              f"{tehsils[0]['below_base']} schools below baseline. M-EE {pct(tw[('Layyah', 'M-EE')]['achT'])} vs "
+              f"W-EE {pct(tw[('Layyah', 'W-EE')]['achT'])}.", "blue")}
+            {callout("Karor Lalisan", f"The strongest tehsil at {pct(tehsils[1]['achT'])} — M-EE "
+              f"{pct(tw[('Karor Lalisan', 'M-EE')]['achT'])} and W-EE {pct(tw[('Karor Lalisan', 'W-EE')]['achT'])} — needing only "
+              f"{fmt(tehsils[1]['gap'])} more students across {tehsils[1]['n']} schools. Its {sum(1 for m in markaz if m['tehsil'] == 'Karor Lalisan' and m['achT'] >= 100)} "
+              f"markaz at target are the district's model.", "green")}
+            {callout("Chaubara", f"{fmt(tehsils[2]['cT'])} students and {fmt(tehsils[2]['gap'])} needed. Its male elementary wing is "
+              f"reasonable ({pct(tw[('Chaubara', 'M-EE')]['achT'])}); its female wing ({fmt(chaubara_we['cT'])} students across "
+              f"{chaubara_we['n']} schools) is at {pct(chaubara_we['achT'])}, the weakest cell in the district.", "pink")}
+          </div>
+        </div>""")
+
+    # 10 · LEVEL 2 — tehsil x elementary wing --------------------------------
+    def cell(a):
+        return (f'<td class="heat" style="background:{ach_color(a["achT"])}12">'
+                f'<div class="h-ach" style="color:{ach_color(a["achT"])}">{pct(a["achT"])}</div>'
+                f'<div class="h-gap">{a["n"]} schools · ' +
+                ('surplus ' + fmt(-a["gap"]) if a["gap"] < 0 else 'needs ' + fmt(a["gap"])) + '</div></td>')
+
+    heat_rows = []
+    for w in ("M-EE", "W-EE"):
+        cells = "".join(cell(tw[(t['name'], w)]) for t in tehsils)
+        heat_rows.append(f'<tr><th>{WING_SHORT[w]} <span>{WING_LABEL[w]}</span></th>{cells}</tr>')
+    cols = "".join(f"<th>{t['name']}<span>{t['n']} schools · needs {fmt(t['gap'])}</span></th>" for t in tehsils)
+    add("Level 2 · Tehsil × wing", "Both elementary wings follow the same geography: Karor is solid, Layyah is behind, Chaubara's girls' wing is the outlier",
+        "M-EE and W-EE are the only wings with a tehsil layer. The secondary wing is shown separately at the bottom, as one block.",
+        f"""
+        <table class="tbl heat-tbl"><thead><tr><th></th>{cols}</tr></thead><tbody>{''.join(heat_rows)}</tbody></table>
+        <div class="sec-h mt16">Secondary wing — reported as one district block, not by tehsil</div>
+        <div class="blockstrip">
+          <div class="bs-name">SE · Secondary</div>
+          <div class="bs-ach" style="color:{ach_color(sec['achT'])}">{pct(sec['achT'])}</div>
+          <div class="bs-meta">{sec['n']} high schools · {fmt(sec['cT'])} students · needs {fmt(sec['gap'])} ({sec['share_gap']:.0f}% of the district gap)</div>
+          <div class="bs-note">No tehsil or markaz layer in the reporting hierarchy</div>
+        </div>
+        <div class="grid3 mt14">
+          {kpi("Karor Lalisan · elementary", pct(tehsils[1]['achT']), f"needs only {fmt(tehsils[1]['gap'])} students across {tehsils[1]['n']} schools", "green")}
+          {kpi("Layyah · elementary", pct(tehsils[0]['achT']), f"needs {fmt(tehsils[0]['gap'])} — {tehsils[0]['share_gap']:.0f}% of the elementary gap", "amber")}
+          {kpi("Chaubara · girls' wing", pct(chaubara_we['achT']), f"{fmt(chaubara_we['cT'])} students across {chaubara_we['n']} schools — the weakest cell in the district", "darkred")}
         </div>""")
 
     # 10 school health ------------------------------------------------------
     hb, ht, ha = district['below_base'], district['below_target'], district['above_target']
-    add("School health", f"{ha} of {fmt(n)} schools have met their target — and {hb} have slipped below baseline",
+    add("Level 4 · School health", f"{ha} of {fmt(n)} schools have met their target — and {hb} have slipped below baseline",
         "Each school is counted once, using total current enrollment against its own baseline and target.",
         f"""
         <div class="split-wide">
@@ -695,7 +795,7 @@ def build():
 
     # 11 distribution -------------------------------------------------------
     dmax = max(d["n"] for d in dist)
-    add("Distribution", "Most schools are close to target — the district average is dragged down by a heavy tail",
+    add("Level 4 · Distribution", "Most schools are close to target — the district average is dragged down by a heavy tail",
         "Achievement is uncapped, so schools far above target and schools far below it both pull on the mean.",
         f"""
         <div class="split-wide">
@@ -721,7 +821,7 @@ def build():
     # 12 concentration ------------------------------------------------------
     rows = [[f"<b>{b['label']}</b>", fmt(b['n']), f"{b['share_schools']:.1f}%", fmt(b['cT']), chip(b['achT']),
              pct(b['median_ach']), fmt(b['gap']), f"{b['share_gap']:.0f}%"] for b in bands]
-    add("Concentration", f"Where the {fmt(district['gap'])} missing students actually are",
+    add("Level 4 · Concentration", f"Where the {fmt(district['gap'])} missing students actually are",
         "Sort Layyah's schools by size and the shortfall stops looking like a district-wide problem and starts looking like a list.",
         f"""
         <div class="split-wide">
@@ -744,8 +844,8 @@ def build():
     # 13 top 20 gap ---------------------------------------------------------
     rows = [[s['name'], s['tehsil'], s['wing'], fmt(s['cT']), fmt(s['tT']), fmt(s['gap']),
              f"{s['growth']:+d}", chip(s['achT'])] for s in top20]
-    add("Priority schools", "The 20 schools that decide the district's result",
-        f"Together they need {fmt(top20_gap)} students — {top20_gap / district['gap'] * 100:.0f}% of the district gap — and all 20 are secondary schools.",
+    add("Level 4 · Priority schools", "The 20 schools that decide the district's result",
+        f"Together they need {fmt(top20_gap)} students — {top20_gap / district['gap'] * 100:.0f}% of the district gap — and all 20 sit in the secondary block.",
         f"""{table(["School (EMIS name)", "Tehsil", "Wing", "Current", "Target", "Gap", "vs baseline", "Achievement"],
                     rows, cls="compact", widths=["470px", "120px", "56px", "84px", "84px", "70px", "90px", "94px"])}
         <div class="note mt10">Thirteen of the twenty are in Layyah tehsil and {sum(1 for s in top20 if 'CHOWK AZAM' in s['name'])} are in or around Chowk Azam.
@@ -755,19 +855,20 @@ def build():
     # 14 below baseline -----------------------------------------------------
     rows = [[s['name'], s['tehsil'], s['wing'], fmt(s['cT']), fmt(s['bT']), f"{s['cT'] - s['bT']:+d}",
              fmt(s['gap']), chip(s['achT'])] for s in below]
-    add("Warning list", f"{hb} schools have fallen below the level they started from",
+    add("Level 4 · Warning list", f"{hb} schools have fallen below the level they started from",
         "These are not small schools: the twelve shown here hold thousands of students between them.",
         f"""{table(["School", "Tehsil", "Wing", "Current", "Baseline", "Change", "Still needed", "Achievement"],
                     rows, cls="compact", widths=["440px", "120px", "58px", "82px", "84px", "76px", "96px", "96px"])}
         <div class="note mt10">Below-baseline schools are the hardest to recover because the loss is already embedded: they must first return to
-        baseline and then climb to target. {sum(1 for s in schools if s['health'] == 'below_base' and s['wing'] == 'SE')} of the {hb} are secondary schools and
-        {sum(1 for s in schools if s['health'] == 'below_base' and s['tehsil'] == 'Layyah')} are in Layyah tehsil. The three largest below-baseline schools are
-        also three of the district's five largest schools — this is where the district's average is being lost.</div>""")
+        baseline and then climb to target. {sum(1 for s in schools if s['health'] == 'below_base' and s['wing'] == 'SE')} of the {hb} sit in the secondary block and
+        {sum(1 for s in schools if s['health'] == 'below_base' and s['wing'] in ('M-EE', 'W-EE') and s['tehsil'] == 'Layyah')} of the
+        {elem['below_base']} elementary ones are in Layyah tehsil. The three largest below-baseline schools are also three of the district's five largest
+        schools — this is where the district's average is being lost.</div>""")
 
     # 15 bright spots -------------------------------------------------------
     rows = [[s['name'], s['tehsil'], s['wing'], fmt(s['cT']), f"+{s['growth']}", fmt(s['inc']), chip(s['achT'])]
             for s in movers]
-    add("What good looks like", "Schools that are actually moving — and what they have in common",
+    add("Level 4 · What good looks like", "Schools that are actually moving — and what they have in common",
         "Ranked by students added since baseline, among schools with 300+ students so the numbers are not small-school noise.",
         f"""{table(["School", "Tehsil", "Wing", "Current", "Added since baseline", "Target increment", "Achievement"],
                     rows, cls="compact", widths=["430px", "120px", "56px", "80px", "140px", "120px", "96px"])}
@@ -789,8 +890,9 @@ def build():
         return table(["#", "Markaz", "Tehsil", "Schools", "Current", "Achievement", "Gap"], rows,
                      cls="compact", widths=["30px", "300px", "116px", "66px", "78px", "96px", "66px"])
 
-    add("Markaz league · top", f"Twenty markaz have already met their target — eighteen are in Karor Lalisan",
-        "Markaz are ranked on the achievement of their summed enrollment, not on the average of their schools' percentages.",
+    add("Level 3 · Markaz league", f"Twenty elementary markaz have already met their target — eighteen are in Karor Lalisan",
+        f"Level 3 of the hierarchy: the {len(markaz)} AEO markaz of M-EE ({wing_markaz['M-EE']}) and W-EE ({wing_markaz['W-EE']}). "
+        f"Markaz are ranked on the achievement of their summed enrollment, not on the average of their schools' percentages.",
         f"""
         <div class="split-wide">
           <div>{markaz_table(markaz_sorted[:10])}
@@ -805,14 +907,14 @@ def build():
               f"Karor Lalisan's male and female elementary markaz take every top-10 slot — {smart_name(markaz_sorted[0]['name'])} ({pct(markaz_sorted[0]['achT'])}), "
               f"{smart_name(markaz_sorted[1]['name'])} ({pct(markaz_sorted[1]['achT'])}), {smart_name(markaz_sorted[2]['name'])} ({pct(markaz_sorted[2]['achT'])}) — on 1,300–2,200 "
               f"students each. These are mid-sized clusters beating target by wide margins, not statistical curiosities.", "green")}
-            {callout("But the same tehsil has a secondary problem",
-              f"Karor's secondary wing is at 12.3% and its largest high schools are below baseline. The markaz league flatters the tehsil's "
-              f"elementary system and hides its secondary one.", "amber")}
+            {callout("What the markaz league does not cover",
+              f"Markaz exist only in M-EE and W-EE. The {sec['n']} high schools are outside this league entirely and sit in their own block at "
+              f"{pct(sec['achT'])} — so a tehsil can look strong here and still contain weak high schools. Read this slide with the block on page 8.", "amber")}
           </div>
         </div>""")
 
     # 17 markaz bottom ------------------------------------------------------
-    add("Markaz league · bottom", f"Six markaz are below zero — four in Layyah and two in Chaubara",
+    add("Level 3 · Markaz league", f"Six elementary markaz are below zero — four in Layyah and two in Chaubara",
         "These are the clusters where enrollment has fallen below baseline; each needs a school-by-school recovery plan.",
         f"""
         <div class="split-wide">
@@ -826,7 +928,7 @@ def build():
             {callout(smart_name(neg_markaz[0]['name']),
               f"{fmt(neg_markaz[0]['cT'])} students across {neg_markaz[0]['n']} schools, achievement {pct(neg_markaz[0]['achT'])} — "
               f"{fmt(neg_markaz[0]['cT'] - neg_markaz[0]['bT'])} below baseline and {fmt(neg_markaz[0]['gap'])} short of target. "
-              f"That is a {neg_markaz[0]['gap'] / max(neg_markaz[0]['cT'], 1) * 100:.0f}% enrollment lift — not a nudge.", "red")}
+              f"That is an {neg_markaz[0]['gap'] / max(neg_markaz[0]['cT'], 1) * 100:.0f}% enrollment lift — not a nudge.", "red")}
             {callout("Mandi Town (Male), Layyah",
               f"The largest under-performer by volume: {fmt([m for m in markaz if 'MANDI TOWN MALE' in m['name']][0]['cT'])} students at "
               f"{pct([m for m in markaz if 'MANDI TOWN MALE' in m['name']][0]['achT'])}. Urban markaz are not automatically high performers — in Layyah the largest "
@@ -835,30 +937,40 @@ def build():
         </div>""")
 
     # 18 gender deep dive ---------------------------------------------------
-    rows = [[f"<b>{t['name']}</b>", fmt(t['cM']), fmt(t['cF']), pct(t['female_share']), f"{t['gpi']:.2f}",
+    rows = [[f"<b>{t['name']}</b> <span class='sm'>tehsil</span>", fmt(t['cM']), fmt(t['cF']), pct(t['female_share']), f"{t['gpi']:.2f}",
              chip(t['achM']), chip(t['achF']), str(t['zero_girls'])] for t in tehsils]
-    add("Gender deep-dive", "Chaubara is the district's gender frontier",
-        f"Girls' share of enrollment falls from {tehsils[0]['female_share']:.1f}% in Layyah tehsil to {tehsils[2]['female_share']:.1f}% in Chaubara, where fewer than one student in two is a girl.",
+    rows.append([f"<b>Elementary wings</b>", f"<b>{fmt(elem['cM'])}</b>", f"<b>{fmt(elem['cF'])}</b>", f"<b>{pct(elem['female_share'])}</b>",
+                 f"<b>{elem['gpi']:.2f}</b>", chip(elem['achM']), chip(elem['achF']), f"<b>{elem['zero_girls']}</b>"])
+    rows.append([f"<b>Secondary block</b>", f"<b>{fmt(sec['cM'])}</b>", f"<b>{fmt(sec['cF'])}</b>", f"<b>{pct(sec['female_share'])}</b>",
+                 f"<b>{sec['gpi']:.2f}</b>", chip(sec['achM']), chip(sec['achF']), "—"])
+    rows.append([f"<b>District</b>", f"<b>{fmt(district['cM'])}</b>", f"<b>{fmt(district['cF'])}</b>", f"<b>{pct(district['female_share'])}</b>",
+                 f"<b>{district['cF'] / district['cM']:.3f}</b>",
+                 chip(district['achM']), chip(district['achF']), f"<b>{zero_girls}</b>"])
+    add("Gender deep-dive", "Chaubara is the district's gender frontier — and the secondary block is where girls fall furthest behind",
+        f"Read down the elementary tehsils, then the secondary block on its own: girls' achievement inside the block is {pct(sec['achF'])} against {pct(sec['achM'])} for boys.",
         f"""
         <div class="split-wide">
           <div>
-            {table(["Tehsil", "Boys", "Girls", "Girls share", "GPI", "Boys ach.", "Girls ach.", "Schools with 0 girls"],
-                   rows, widths=["118px", "80px", "80px", "92px", "56px", "88px", "88px", "128px"])}
-            <div class="note">GPI = girls ÷ boys current enrollment. A GPI of {tehsils[2]['gpi']:.2f} means roughly 14 girls for every 16 boys;
-            at district level the ratio is close to parity ({district['cF'] / district['cM']:.3f}), which masks the Chaubara shortfall.</div>
-            <div class="mt16 sec-h">Schools with no girls enrolled, by tehsil</div>
-            {bars([(t['name'], t['zero_girls'], "#db2777", str(t['zero_girls'])) for t in tehsils], max_value=60, label_w=112, height=16)}
-            <div class="note">{zero_girls} schools record no girls and {zero_boys} record no boys. Some are genuinely single-gender schools (GGHS / GHS);
-            others are data, merger or closure issues that should be verified before the next target cycle.</div>
+            {table(["Reporting level", "Boys", "Girls", "Girls share", "GPI", "Boys ach.", "Girls ach.", "Schools with 0 girls"],
+                   rows, cls="compact", widths=["124px", "76px", "76px", "88px", "52px", "82px", "82px", "116px"])}
+            <div class="note">GPI = girls ÷ boys current enrollment. Tehsil rows cover M-EE and W-EE only; the secondary block is a single
+            district-wide row. A Chaubara GPI of {tehsils[2]['gpi']:.2f} means roughly 14 girls for every 16 boys, while the district ratio
+            ({district['cF'] / district['cM']:.3f}) looks like parity and hides it. The dash is used for the secondary block because its
+            single-gender schools are by design ({sec['girls_schools']} girls' and {sec['boys_schools']} boys' high schools).</div>
+            <div class="mt14 sec-h">Schools with no girls enrolled — elementary tehsils</div>
+            {bars([(t['name'], t['zero_girls'], "#db2777", str(t['zero_girls'])) for t in tehsils], max_value=55, label_w=112, height=16)}
           </div>
           <div class="side">
-            {stat("District GPI", f"{district['cF'] / district['cM']:.3f}", "blue")}
-            {stat("Chaubara GPI", f"{tehsils[2]['gpi']:.3f}", "pink")}
+            {stat("Elementary GPI", f"{elem['gpi']:.3f}", "blue")}
+            {stat("Secondary GPI", f"{sec['gpi']:.3f}", "pink")}
             {stat("Girls still needed", fmt(district['needF']), "pink")}
             {callout("What would move the number",
               f"Chaubara's female elementary wing is at {pct(chaubara_we['achT'])} with {fmt(chaubara_we['cF'])} girls across {chaubara_we['n']} schools — "
-              f"an average of {chaubara_we['cF'] / chaubara_we['n']:.0f} girls per school. Facility audits (boundary wall, toilets, drinking water), "
-              f"girls' stipend and transport uptake, and community mobilisation in these {tehsils[2]['markaz']} markaz are the shortest paths to enrollment.", "pink")}
+              f"about {chaubara_we['cF'] / chaubara_we['n']:.0f} girls per school. Facility audits, stipend and transport uptake, and community "
+              f"mobilisation in its {tehsils[2]['markaz']} markaz are the shortest paths to enrollment.", "pink")}
+            {callout("Inside the secondary block",
+              f"Girls' achievement there is {pct(sec['achF'])} and boys' {pct(sec['achM'])}; girls carry {fmt(sec['needF'])} of the block's "
+              f"{fmt(sec['gap'])} shortfall. Fixing the block is fixing girls' secondary enrollment.", "amber")}
           </div>
         </div>""")
 
@@ -876,9 +988,11 @@ def build():
         </div>
         <div class="split2 mt16">
           <div>
-            <div class="sec-h">By tehsil</div>
-            {bars([(t['name'], abs(t['delta']), "#2563eb" if t['delta'] >= 0 else "#dc3545", signed(t['delta'])) for t in tehsils],
-                  max_value=120, label_w=110, height=16)}
+            <div class="sec-h">By tehsil (elementary) and the secondary block</div>
+            {bars([(t['name'], abs(day['by_tehsil'][t['name']]), "#2563eb" if day['by_tehsil'][t['name']] >= 0 else "#dc3545",
+                    signed(day['by_tehsil'][t['name']])) for t in tehsils]
+                   + [("Secondary block", abs(day['by_sec']), "#0f766e" if day['by_sec'] >= 0 else "#dc3545", signed(day['by_sec']))],
+                  max_value=120, label_w=130, height=16)}
             <div class="sec-h mt12">By wing</div>
             {bars([(WING_LABEL[w['code']], abs(w['delta']), WING_COLOR[w['code']], signed(w['delta'])) for w in wings],
                   max_value=100, label_w=150, height=16)}
@@ -900,8 +1014,9 @@ def build():
         <div class="grid2">
           <div class="strength">
             <div class="st-h">1 · Elementary enrollment is on track</div>
-            <p>M-EE is at <b>{pct(wings[0]['achT'])}</b> and W-EE at <b>{pct(wings[1]['achT'])}</b>; together the elementary wings need only
-            <b>{fmt(elem['gap'])}</b> more students — a {elem['gap'] / elem['cT'] * 100:.1f}% lift. Karor Lalisan's elementary wings are effectively at target.</p>
+            <p>M-EE is at <b>{pct(wings[0]['achT'])}</b> and W-EE at <b>{pct(wings[1]['achT'])}</b>; together the elementary wings are at
+            <b>{pct(elem['achT'])}</b> and need only <b>{fmt(elem['gap'])}</b> more students — a {elem['gap'] / elem['cT'] * 100:.1f}% lift.
+            Karor Lalisan's elementary tehsil is effectively at target.</p>
             <div class="st-n">{fmt(elem['cT'])} students · {elem['share_gap']:.0f}% of the district gap</div>
           </div>
           <div class="strength">
@@ -917,31 +1032,31 @@ def build():
             <div class="st-n">{len(at_target)} of {len(markaz)} markaz at 100%+</div>
           </div>
           <div class="strength">
-            <div class="st-h">4 · Large secondary schools can move</div>
-            <p>{movers[1]['name']} added <b>{movers[1]['growth']}</b> students, {movers[2]['name']} <b>{movers[2]['growth']}</b> and
-            {movers[7]['name']} <b>{movers[7]['growth']}</b> — all schools of 700–1,400 students. The secondary slide is a management problem,
+            <div class="st-h">4 · High schools can move</div>
+            <p>Inside the secondary block, {movers[1]['name']} added <b>{movers[1]['growth']}</b> students, {movers[2]['name']} <b>{movers[2]['growth']}</b>
+            and {movers[7]['name']} <b>{movers[7]['growth']}</b> — all schools of 700–1,400 students. The block's slide is a management problem,
             not a demographic one.</p>
             <div class="st-n">Best eight large schools added {sum(s['growth'] for s in movers)} students</div>
           </div>
         </div>
         {callout("What this means",
-          f"The district does not need a new strategy. It needs to apply the practices of its elementary and Karor systems to its large secondary "
-          f"schools — and to hold markaz accountable for the {len(markaz) - len(at_target)} clusters that are not yet at target.", "green")}""")
+          f"The district does not need a new strategy. It needs to apply the practices of its elementary and Karor systems to the secondary block — "
+          f"and to hold the {len(markaz) - len(at_target)} elementary markaz that are not yet at target accountable for their clusters.", "green")}""")
 
     # 21 constraints --------------------------------------------------------
     constraints = [
-        ("Secondary wing", pct(wings[2]['achT']),
-         f"{fmt(wings[2]['gap'])} students short — {wings[2]['share_gap']:.0f}% of the district gap — from {wings[2]['n']} schools teaching "
-         f"{wings[2]['share_enr']:.0f}% of all students, and has added only {fmt(wings[2]['growth'])} since baseline.", "red"),
+        ("Secondary block", pct(sec['achT']),
+         f"{fmt(sec['gap'])} students short — {sec['share_gap']:.0f}% of the district gap — from {sec['n']} high schools teaching "
+         f"{sec['share_enr']:.0f}% of all students, and has added only {fmt(sec['growth'])} since baseline.", "red"),
         ("Large schools (800+)", pct(big['achT']),
          f"{big['n']} schools, {fmt(big['cT'])} students, {fmt(big['gap'])} of the gap. The three largest — {largest[0]['name']} ({fmt(largest[0]['cT'])}), "
          f"{largest[1]['name']} ({fmt(largest[1]['cT'])}) and {largest[2]['name']} ({fmt(largest[2]['cT'])}) — are all below baseline.", "darkred"),
-        ("Layyah tehsil", pct(tehsils[0]['achT']),
-         f"{fmt(tehsils[0]['gap'])} of the {fmt(district['gap'])} district shortfall, {tehsils[0]['below_base']} schools below baseline, "
-         f"and not one of its {tehsils[0]['markaz']} markaz at target.", "amber"),
-        ("Chaubara girls", f"GPI {tehsils[2]['gpi']:.2f}",
-         f"{tehsils[2]['zero_girls']} schools with no girls, {pct(tehsils[2]['female_share'])} girls' share and female elementary achievement of "
-         f"{pct(chaubara_we['achT'])} — the weakest cell in the district.", "pink"),
+        ("Layyah tehsil (elementary)", pct(tehsils[0]['achT']),
+         f"{fmt(tehsils[0]['gap'])} of the {fmt(elem['gap'])} elementary shortfall — {tehsils[0]['share_gap']:.0f}% — across {tehsils[0]['n']} schools, "
+         f"{tehsils[0]['below_base']} of them below baseline, and not one of its {tehsils[0]['markaz']} markaz at target.", "amber"),
+        ("Chaubara girls (elementary)", f"GPI {tehsils[2]['gpi']:.2f}",
+         f"The female elementary wing is at {pct(chaubara_we['achT'])} on {fmt(chaubara_we['cT'])} students; {tehsils[2]['zero_girls']} schools record "
+         f"no girls at all — the weakest cell in the district.", "pink"),
     ]
     rows = "".join(f'<div class="problem tone-{tone}"><div class="p-top"><span class="p-name">{nm}</span>'
                    f'<span class="p-val">{val}</span></div><div class="p-text">{txt}</div></div>'
@@ -950,8 +1065,8 @@ def build():
         "Each is a distinct problem with a distinct owner — not a single “enrollment is low” story.",
         f"""{rows}
         {callout("The common thread",
-          f"All four constraints are about <b>scale</b>, not effort. Layyah's small schools are delivering; its largest schools, its secondary wing "
-          f"and its most rural girls' schools are not. A plan built around the {sum(1 for s in schools if s['gap'] > 50)} schools that each need 50+ "
+          f"All four constraints are about <b>scale</b>, not effort. Elementary schools are delivering; the secondary block, its largest schools "
+          f"and Chaubara's girls' wing are not. A plan built around the {sum(1 for s in schools if s['gap'] > 50)} schools that each need 50+ "
           f"students would address all four at once.", "navy")}""")
 
     # 22 action plan --------------------------------------------------------
@@ -1055,20 +1170,26 @@ def build():
         All figures recomputed for District Layyah from the published school-level files; the accompanying CSV extracts contain the full working.</div>""")
 
     # appendix A ------------------------------------------------------------
-    rows = [[f"<b>{t['name']}</b>", fmt(t['n']), str(t['markaz']), fmt(t['cT']), fmt(t['bT']), fmt(t['tT']),
-             fmt(t['growth']), fmt(t['gap']), chip(t['achT']), pct(t['female_share']), f"{t['gpi']:.3f}",
-             f"{t['below_base']} / {t['below_target']} / {t['above_target']}"] for t in tehsils]
-    rows.append([f"<b>District</b>", f"<b>{fmt(n)}</b>", f"<b>{len(markaz)}</b>", f"<b>{fmt(district['cT'])}</b>",
-                 f"<b>{fmt(district['bT'])}</b>", f"<b>{fmt(district['tT'])}</b>", f"<b>{fmt(district['growth'])}</b>",
-                 f"<b>{fmt(district['gap'])}</b>", chip(district['achT']), f"<b>{pct(district['female_share'])}</b>",
-                 f"<b>{district['gpi']:.3f}</b>",
-                 f"<b>{district['below_base']} / {district['below_target']} / {district['above_target']}</b>"])
-    add("Appendix A", "Tehsil detail — full table",
-        "Health reads below baseline / below target / at or above target.",
-        f"""{table(["Tehsil", "Schools", "Markaz", "Current", "Baseline", "Target", "Added", "Gap", "Achievement", "Girls share", "GPI", "Health"],
-                    rows, widths=["112px", "66px", "62px", "84px", "84px", "82px", "70px", "70px", "92px", "78px", "54px", "128px"])}
+    def level_row(label, a, markaz_cell, cls="", gpi=True):
+        return [f"<b>{label}</b>{cls}", fmt(a['n']), markaz_cell, fmt(a['cT']), fmt(a['bT']), fmt(a['tT']),
+                fmt(a['growth']), fmt(a['gap']), chip(a['achT']), pct(a['female_share']),
+                f"{a['gpi']:.3f}" if gpi else "—", f"{a['below_base']} / {a['below_target']} / {a['above_target']}"]
+
+    rows = [level_row(f"{w['name']}", w, str(wing_markaz[w['code']]) if w['code'] != 'SE' else "—",
+                      " <span class='sm'>(wing)</span>", gpi=(w['code'] == 'SE'))
+            for w in wings]
+    rows += [level_row(f"{t['name']}", t, str(t['markaz']), " <span class='sm'>(tehsil)</span>") for t in tehsils]
+    rows += [level_row("Elementary wings", elem, str(len(markaz)), " <span class='sm'>(subtotal)</span>"),
+             level_row("Secondary block", sec, "—", " <span class='sm'>(block)</span>"),
+             level_row("District Layyah", district, str(len(markaz)), " <span class='sm'>· total</span>")]
+    add("Appendix A", "Full table by reporting level",
+        "Wings first, then the elementary tehsils, then the secondary block — the order in which the district is administered.",
+        f"""{table(["Reporting level", "Schools", "Markaz", "Current", "Baseline", "Target", "Added", "Gap", "Achievement", "Girls share", "GPI", "Health"],
+                    rows, cls="compact", widths=["150px", "58px", "56px", "76px", "76px", "76px", "64px", "64px", "86px", "72px", "50px", "116px"])}
         <div class="note mt10">Added = current − baseline. Gap = target − current. Achievement is computed on summed values, not averaged across schools.
-        GPI = girls ÷ boys current enrollment.</div>""")
+        GPI = girls ÷ boys current enrollment, shown only for units that enrol both genders — the M-EE and W-EE wings are gender-targeted, so their
+        ratio is not a parity measure. Health reads below baseline / below target / at or above target. The three elementary tehsils sum to the
+        elementary subtotal; subtotal + secondary block = the district.</div>""")
 
     # appendix B–D ----------------------------------------------------------
     for i, t in enumerate(tehsils, start=2):
@@ -1077,36 +1198,39 @@ def build():
         half = (len(rows) + 1) // 2
         head = ["Markaz", "Sch.", "Current", "Ach.", "Gap"]
         widths = ["228px", "32px", "62px", "66px", "50px"]
-        add(f"Appendix {chr(64 + i)}", f"{t['name']} tehsil — all {len(tm)} markaz",
-            f"Ranked by achievement. {t['name']} holds {fmt(t['cT'])} students, {t['share_gap']:.0f}% of the district gap and "
-            f"{sum(1 for m in tm if m['achT'] >= 100)} markaz at or above target.",
+        add(f"Appendix {chr(64 + i)}", f"{t['name']} tehsil — all {len(tm)} elementary markaz",
+            f"Markaz of M-EE and W-EE in this tehsil, ranked by achievement. {t['name']} holds {fmt(t['cT'])} elementary students, "
+            f"{t['share_gap']:.0f}% of the elementary gap and {sum(1 for m in tm if m['achT'] >= 100)} markaz at or above target.",
             f"""<div class="two-col">
                 {table(head, rows[:half], cls="compact", widths=widths)}
                 {table(head, rows[half:], cls="compact", widths=widths)}
             </div>
-            <div class="note mt8">A negative gap means the markaz has already exceeded its target. Markaz are AEO clusters; secondary schools are
-            grouped under a separate “Secondary Wing” heading in the source data and are excluded from the markaz count.</div>""")
+            <div class="note mt8">A negative gap means the markaz has already exceeded its target. Markaz exist only inside the elementary wings
+            ({tehsil_markaz[t['name']]['M-EE']} M-EE · {tehsil_markaz[t['name']]['W-EE']} W-EE in {t['name']}); the secondary wing has no markaz layer and
+            is reported as one district block.</div>""")
 
     # appendix E ------------------------------------------------------------
-    rows = [[str(i), s['name'], s['tehsil'], s['wing'], fmt(s['cT']), fmt(s['gap']), f"{s['growth']:+d}", chip(s['achT'])]
-            for i, s in enumerate(by_gap[:40], 1)]
-    head = ["#", "School", "Tehsil", "Wing", "Current", "Gap", "vs base", "Ach."]
-    widths = ["22px", "204px", "82px", "38px", "52px", "44px", "48px", "56px"]
-    add("Appendix E", "Top 40 schools by students needed",
-        f"The working list for the secondary recovery sprint — 40 schools holding {sum(s['gap'] for s in by_gap[:40]) / district['gap'] * 100:.0f}% of the district gap.",
+    sec40 = sec_by_gap[:40]
+    rows = [[str(i), s['name'], fmt(s['cT']), fmt(s['gap']), f"{s['growth']:+d}", chip(s['achT'])]
+            for i, s in enumerate(sec40, 1)]
+    head = ["#", "High school", "Current", "Gap", "vs base", "Ach."]
+    widths = ["22px", "236px", "66px", "52px", "56px", "64px"]
+    add("Appendix E", f"Secondary block — top 40 high schools by students needed",
+        f"One block, one list: these 40 schools hold {sum(s['gap'] for s in sec40) / sec['gap'] * 100:.0f}% of the secondary gap and "
+        f"{sum(s['gap'] for s in sec40) / district['gap'] * 100:.0f}% of the district gap. Location is not used as an aggregation level here.",
         f"""<div class="two-col">
             {table(head, rows[:20], cls="compact", widths=widths)}
             {table(head, rows[20:], cls="compact", widths=widths)}
         </div>
-        <div class="note mt8">Gap = target − current. “vs base” = current − baseline.
-        {sum(1 for s in by_gap[:40] if s['wing'] == 'SE')} of the 40 are secondary schools.</div>""")
+        <div class="note mt8">Gap = target − current; “vs base” = current − baseline. The complete list of all {sec['n']} high schools is in
+        <b>layyah_secondary.csv</b>.</div>""")
 
     # closing ---------------------------------------------------------------
     slides.append({"kicker": "", "title": "", "sub": "", "cls": "slide-close no-foot", "body": f"""
         <div class="close-wrap">
           <div class="close-kicker">In one sentence</div>
           <div class="close-text">Layyah's enrollment problem is not spread across {fmt(n)} schools — it is concentrated in
-          <b>{fmt(top20_gap)} students across 20 secondary schools</b>, in <b>girls' education in Chaubara</b>, and in
+          <b>{fmt(top20_gap)} students across 20 high schools in the secondary block</b>, in <b>girls' education in Chaubara</b>, and in
           <b>the {big['n']} largest schools, which as a group now sit below their baseline</b>.</div>
           <div class="close-grid">
             <div><b>{pct(district['achT'])}</b><span>today</span></div>
@@ -1119,7 +1243,7 @@ def build():
     page = render(slides, district, n)
     OUT.mkdir(exist_ok=True)
     (OUT / "index.html").write_text(page, encoding="utf-8")
-    write_csvs(schools, tehsils, markaz + [m for m in markaz_all if m["secondary"]], district)
+    write_csvs(schools, tehsils, markaz, district, wings, elem, sec, wing_markaz)
     print(f"wrote {OUT / 'index.html'} — {len(slides)} slides, {len(page) / 1024:.0f} KB")
 
 
@@ -1175,38 +1299,79 @@ def render(slides, district, n):
 # ---------------------------------------------------------------------------
 # CSV extracts
 # ---------------------------------------------------------------------------
-def write_csvs(schools, tehsils, markaz, district):
+def write_csvs(schools, tehsils, markaz, district, wings, elem, sec, wing_markaz):
+    """School, markaz, level and secondary working sheets.
+
+    layyah_schools.csv    every school, with its wing and (elementary only) markaz
+    layyah_markaz.csv     the 100 elementary AEO markaz (M-EE / W-EE) — no secondary
+    layyah_levels.csv     district totals at every reporting level, wing first
+    layyah_secondary.csv  the secondary block, all high schools together
+    """
     OUT.mkdir(exist_ok=True)
+    head = ["EMIS", "School", "Wing", "Reporting level", "Tehsil", "Markaz", "Boys Baseline", "Boys Current",
+            "Boys Target", "Girls Baseline", "Girls Current", "Girls Target", "Other Current", "Total Baseline",
+            "Total Current", "Total Target", "Achievement %", "Status", "Gap to Target", "Change vs Baseline",
+            "Day Change"]
+
+    def school_row(s, level):
+        markaz = "— (no markaz layer)" if s["wing"] == "SE" else smart_name(s["markaz"])
+        return [s["emis"], s["name"], s["wing"], level, s["tehsil"], markaz,
+                s["bM"], s["cM"], s["tM"], s["bF"], s["cF"], s["tF"], s["cO"],
+                s["bT"], s["cT"], s["tT"], f"{s['achT']:.1f}", s["health"], s["gap"], s["growth"], s["delta"]]
+
     with open(OUT / "layyah_schools.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["EMIS", "School", "Tehsil", "Markaz", "Wing", "Boys Baseline", "Boys Current", "Boys Target",
-                    "Girls Baseline", "Girls Current", "Girls Target", "Other Current", "Total Baseline",
-                    "Total Current", "Total Target", "Achievement %", "Status", "Gap to Target",
-                    "Change vs Baseline", "Day Change"])
-        for s in sorted(schools, key=lambda x: (TEHSIL_ORDER.index(x["tehsil"]), -x["gap"])):
-            w.writerow([s["emis"], s["name"], s["tehsil"], smart_name(s["markaz"]), s["wing"],
-                        s["bM"], s["cM"], s["tM"], s["bF"], s["cF"], s["tF"], s["cO"],
-                        s["bT"], s["cT"], s["tT"], f"{s['achT']:.1f}", s["health"], s["gap"],
-                        s["growth"], s["delta"]])
+        w.writerow(head)
+        # wing first, then tehsil, then gap — the order of the hierarchy
+        order = {"M-EE": 0, "W-EE": 1, "SE": 2}
+        for s in sorted(schools, key=lambda x: (order[x["wing"]], TEHSIL_ORDER.index(x["tehsil"]), -x["gap"])):
+            w.writerow(school_row(s, "Wing → School" if s["wing"] == "SE" else "Wing → Tehsil → Markaz → School"))
+
     with open(OUT / "layyah_markaz.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["Markaz", "Tehsil", "Schools", "Boys Current", "Girls Current", "Total Baseline",
+        w.writerow(["Markaz", "Wing", "Tehsil", "Schools", "Boys Current", "Girls Current", "Total Baseline",
                     "Total Current", "Total Target", "Achievement %", "Gap to Target",
-                    "Share of District Gap %", "Below Baseline", "Below Target", "At or Above Target"])
-        for m in sorted(markaz, key=lambda m: (TEHSIL_ORDER.index(m["tehsil"]), m["secondary"], -m["achT"])):
-            w.writerow([("Secondary Wing (SE)" if m["secondary"] else smart_name(m["name"])), m["tehsil"],
-                        m["n"], m["cM"], m["cF"], m["bT"], m["cT"],
-                        m["tT"], f"{m['achT']:.1f}", m["gap"], f"{m['share_gap']:.1f}", m["below_base"],
-                        m["below_target"], m["above_target"]])
-    with open(OUT / "layyah_tehsils.csv", "w", newline="", encoding="utf-8") as fh:
+                    "Share of Elementary Gap %", "Share of District Gap %", "Below Baseline", "Below Target",
+                    "At or Above Target"])
+        for m in sorted(markaz, key=lambda m: (TEHSIL_ORDER.index(m["tehsil"]), -m["achT"])):
+            wings_here = sorted({s["wing"] for s in schools
+                                 if s["tehsil"] == m["tehsil"] and s["markaz"] == m["name"]})
+            w.writerow([smart_name(m["name"]), "+".join(wings_here), m["tehsil"], m["n"], m["cM"], m["cF"],
+                        m["bT"], m["cT"], m["tT"], f"{m['achT']:.1f}", m["gap"], f"{m['share_gap']:.1f}",
+                        f"{m['share_district_gap']:.1f}", m["below_base"], m["below_target"], m["above_target"]])
+
+    levels = [("Wing", "District → Wing", f"{w['code']} · {w['name']}", w) for w in wings]
+    levels += [("Tehsil (elementary)", "District → Wing → Tehsil", f"Tehsil {t['name']} (M-EE + W-EE)", t) for t in tehsils]
+    levels += [("Elementary subtotal", "District → Wing (M-EE + W-EE)", "M-EE + W-EE", elem),
+               ("Secondary block", "District → Wing (SE, no tehsil layer)", "SE · all high schools", sec),
+               ("District", "District", "Layyah", district)]
+    with open(OUT / "layyah_levels.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
-        w.writerow(["Tehsil", "Schools", "Markaz", "Boys Baseline", "Boys Current", "Boys Target",
-                    "Girls Baseline", "Girls Current", "Girls Target", "Total Baseline", "Total Current",
-                    "Total Target", "Achievement %", "Gap to Target", "GPI", "Below Baseline"])
-        for t in tehsils:
-            w.writerow([t["name"], t["n"], t["markaz"], t["bM"], t["cM"], t["tM"], t["bF"], t["cF"],
-                        t["tF"], t["bT"], t["cT"], t["tT"], f"{t['achT']:.1f}", t["gap"],
-                        f"{t['gpi']:.3f}", t["below_base"]])
+        w.writerow(["Reporting level", "Hierarchy", "Unit", "Schools", "Markaz", "Boys Baseline", "Boys Current",
+                    "Boys Target", "Girls Baseline", "Girls Current", "Girls Target", "Total Baseline",
+                    "Total Current", "Total Target", "Achievement %", "Gap to Target", "Share of District Gap %",
+                    "GPI", "Below Baseline", "Below Target", "At or Above Target"])
+        for level, hierarchy, unit, a in levels:
+            markaz_cell = (str(wing_markaz[a["code"]]) if level == "Wing" and a["code"] != "SE"
+                           else "—" if level in ("Wing", "Secondary block") else str(len(markaz)) if level == "District"
+                           else str(a.get("markaz", "")))
+            w.writerow([level, hierarchy, unit, a["n"], markaz_cell, a["bM"], a["cM"], a["tM"], a["bF"], a["cF"],
+                        a["tF"], a["bT"], a["cT"], a["tT"], f"{a['achT']:.1f}", a["gap"],
+                        f"{a['gap'] / district['gap'] * 100:.1f}", f"{a['gpi']:.3f}", a["below_base"],
+                        a["below_target"], a["above_target"]])
+
+    with open(OUT / "layyah_secondary.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["Rank by gap", "EMIS", "High school", "Type", "Tehsil (location only)",
+                    "Boys Baseline", "Boys Current", "Boys Target", "Girls Baseline", "Girls Current",
+                    "Girls Target", "Other Current", "Total Baseline", "Total Current", "Total Target",
+                    "Achievement %", "Status", "Gap to Target", "Change vs Baseline", "Day Change"])
+        for i, s in enumerate(sorted([x for x in schools if x["wing"] == "SE"],
+                                     key=lambda x: -x["gap"]), 1):
+            kind = "Girls" if s["name"].upper().startswith("GG") else "Boys"
+            w.writerow([i, s["emis"], s["name"], kind, s["tehsil"], s["bM"], s["cM"], s["tM"], s["bF"], s["cF"],
+                        s["tF"], s["cO"], s["bT"], s["cT"], s["tT"], f"{s['achT']:.1f}", s["health"], s["gap"],
+                        s["growth"], s["delta"]])
 
 
 if __name__ == "__main__":
