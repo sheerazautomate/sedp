@@ -20,7 +20,7 @@
     slides.forEach(function (el, k) { el.classList.toggle('active', k === i); });
     if (counter) counter.textContent = (i + 1) + ' / ' + slides.length;
     if (progress) progress.style.width = ((i + 1) / slides.length * 100) + '%';
-    if (push && history.replaceState) history.replaceState(null, '', '#' + (i + 1));
+    if (push) { try { history.replaceState(null, '', '#' + (i + 1)); } catch (err) { /* file:// */ } }
   }
 
   function fromHash() {
