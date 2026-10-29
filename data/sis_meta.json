@@ -1,40 +1,19 @@
 {
-  "fetched_at_utc": "2026-10-29T18:02:39Z",
-  "fetched_at_pkt": "2026-10-29 11:02 PM PKT",
-  "ref_date_pkt": "2026-10-29",
-  "sync_type": "sync",
+  "fetched_at_utc": "2026-10-29T23:45:22Z",
+  "fetched_at_pkt": "2026-10-30 04:45 AM PKT",
+  "ref_date_pkt": "2026-10-30",
+  "sync_type": "reference",
   "source": "sis.pesrp.edu.pk dashboard_revamp/get_gender_summary_pie",
-  "rows": 38123,
+  "rows": 38128,
   "requested": 38128,
-  "failed": 5,
+  "failed": 0,
   "unmapped": 6,
   "dtms_refreshed": 192,
-  "reference_adjusted": 192,
+  "reference_adjusted": 0,
   "skipped_statuses": {
     "missing": 6
   },
   "workers": 6,
-  "bytes": 2455338,
-  "failure_examples": [
-    {
-      "emis": "38140217",
-      "error": "403 Client Error: Forbidden for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37120045"
-    },
-    {
-      "emis": "38110067",
-      "error": "403 Client Error: Forbidden for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37120045"
-    },
-    {
-      "emis": "38120175",
-      "error": "403 Client Error: Forbidden for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37120045"
-    },
-    {
-      "emis": "38110288",
-      "error": "403 Client Error: Forbidden for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37120045"
-    },
-    {
-      "emis": "37440175",
-      "error": "403 Client Error: Forbidden for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37120045"
-    }
-  ]
+  "bytes": 2444599,
+  "failure_examples": []
 }
