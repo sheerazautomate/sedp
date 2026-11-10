@@ -1,0 +1,10 @@
+Reporting level,Hierarchy,Unit,Schools,Markaz,Boys Baseline,Boys Current,Boys Target,Girls Baseline,Girls Current,Girls Target,Total Baseline,Total Current,Total Target,Achievement %,Gap to Target,Share of District Gap %,GPI,Below Baseline,Below Target,At or Above Target
+Wing,District → Wing,M-EE · Male Elementary,556,57,60348,61734,63734,25022,26635,26447,85370,88376,90181,62.5,1805,17.0,0.431,51,224,281
+Wing,District → Wing,W-EE · Female Elementary,467,43,16247,17670,17104,53420,53925,56321,69667,71603,73425,51.5,1822,17.1,3.052,49,232,186
+Wing,District → Wing,SE · Secondary,200,—,53728,54381,57368,52601,52450,56481,106329,106838,113849,6.8,7011,65.9,0.964,39,119,42
+Tehsil (elementary),District → Wing → Tehsil,Tehsil Layyah (M-EE + W-EE),495,44,35132,36053,37270,38110,38956,40363,73242,75014,77633,40.4,2619,24.6,1.081,57,282,156
+Tehsil (elementary),District → Wing → Tehsil,Tehsil Karor Lalisan (M-EE + W-EE),368,34,28499,29891,29596,29696,30541,30857,58195,60437,60453,99.3,16,0.2,1.022,18,105,245
+Tehsil (elementary),District → Wing → Tehsil,Tehsil Chaubara (M-EE + W-EE),160,22,12964,13460,13972,10636,11063,11548,23600,24528,25520,48.3,992,9.3,0.822,25,69,66
+Elementary subtotal,District → Wing (M-EE + W-EE),M-EE + W-EE,1023,100,76595,79404,80838,78442,80560,82768,155037,159979,163606,57.7,3627,34.1,1.015,100,456,467
+Secondary block,"District → Wing (SE, no tehsil layer)",SE · all high schools,200,—,53728,54381,57368,52601,52450,56481,106329,106838,113849,6.8,7011,65.9,0.964,39,119,42
+District,District,Layyah,1223,100,130323,133785,138206,131043,133010,139249,261366,266817,277455,33.9,10638,100.0,0.994,139,575,509
