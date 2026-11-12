@@ -1,15 +1,15 @@
 {
-  "fetched_at_utc": "2026-11-12T11:27:10Z",
-  "fetched_at_pkt": "2026-11-12 04:27 PM PKT",
-  "ref_date_pkt": "2026-11-12",
-  "sync_type": "sync",
+  "fetched_at_utc": "2026-11-12T19:25:26Z",
+  "fetched_at_pkt": "2026-11-13 12:25 AM PKT",
+  "ref_date_pkt": "2026-11-13",
+  "sync_type": "reference",
   "source": "sis.pesrp.edu.pk dashboard_revamp/get_gender_summary_pie",
   "rows": 38128,
   "requested": 38128,
   "failed": 0,
   "unmapped": 6,
   "dtms_refreshed": 204,
-  "reference_adjusted": 204,
+  "reference_adjusted": 0,
   "skipped_statuses": {
     "missing": 6
   },
