@@ -1,19 +1,60 @@
 {
-  "fetched_at_utc": "2026-11-19T23:28:09Z",
-  "fetched_at_pkt": "2026-11-20 04:28 AM PKT",
+  "fetched_at_utc": "2026-11-20T04:35:35Z",
+  "fetched_at_pkt": "2026-11-20 09:35 AM PKT",
   "ref_date_pkt": "2026-11-20",
-  "sync_type": "reference",
+  "sync_type": "sync",
   "source": "sis.pesrp.edu.pk dashboard_revamp/get_gender_summary_pie",
-  "rows": 38128,
+  "rows": 37990,
   "requested": 38128,
-  "failed": 0,
+  "failed": 138,
   "unmapped": 6,
-  "dtms_refreshed": 217,
-  "reference_adjusted": 0,
+  "dtms_refreshed": 211,
+  "reference_adjusted": 211,
   "skipped_statuses": {
     "missing": 6
   },
   "workers": 6,
-  "bytes": 2441913,
-  "failure_examples": []
+  "bytes": 2446465,
+  "failure_examples": [
+    {
+      "emis": "37160190",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "37110110",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31120045",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31150406",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31140117",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31150217",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31110067",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31110467",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31260226",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    },
+    {
+      "emis": "31210193",
+      "error": "500 Server Error: Internal Server Error for url: https://sis.pesrp.edu.pk/dashboard/get_dtms_by_emis_code?s_id_emis_code=37130015"
+    }
+  ]
 }
