@@ -1,44 +1,19 @@
 {
-  "fetched_at_utc": "2026-11-27T10:15:49Z",
-  "fetched_at_pkt": "2026-11-27 03:15 PM PKT",
-  "ref_date_pkt": "2026-11-27",
-  "sync_type": "sync",
+  "fetched_at_utc": "2026-11-27T20:35:54Z",
+  "fetched_at_pkt": "2026-11-28 01:35 AM PKT",
+  "ref_date_pkt": "2026-11-28",
+  "sync_type": "reference",
   "source": "sis.pesrp.edu.pk dashboard_revamp/get_gender_summary_pie",
-  "rows": 38122,
+  "rows": 38128,
   "requested": 38128,
-  "failed": 6,
+  "failed": 0,
   "unmapped": 6,
   "dtms_refreshed": 217,
-  "reference_adjusted": 217,
+  "reference_adjusted": 0,
   "skipped_statuses": {
     "missing": 6
   },
   "workers": 6,
-  "bytes": 2455074,
-  "failure_examples": [
-    {
-      "emis": "32120662",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120015 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69c1e"
-    },
-    {
-      "emis": "32110636",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120038 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69c1f"
-    },
-    {
-      "emis": "31340717",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120015 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69856"
-    },
-    {
-      "emis": "31310099",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120038 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69852"
-    },
-    {
-      "emis": "31320383",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120015 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69837"
-    },
-    {
-      "emis": "31330013",
-      "error": "HTTPSConnectionPool(host='sis.pesrp.edu.pk', port=443): Max retries exceeded with url: /dashboard/get_dtms_by_emis_code?s_id_emis_code=37120038 (Caused by ConnectTimeoutError(<HTTPSConnection(host='sis.pesrp.edu.pk', port=443) at 0x7ba69837"
-    }
-  ]
+  "bytes": 2455462,
+  "failure_examples": []
 }
